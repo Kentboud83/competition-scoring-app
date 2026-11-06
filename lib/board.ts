@@ -63,97 +63,103 @@ function pointsFor(store: Store, id: string, fridays: string[]) {
   return { total, entered }
 }
 
-export function computeBoard(store: Store, opts: { view: View; friday?: string; month?: string }): Board {
-  const today = new Date()
-  const friday = opts.friday ?? fridayOf(today)
-  const month = opts.month ?? monthOf(friday)
-  const weekFridays = [friday]
-  const monthFridays = weeksInMonth(store, month)
-  const prev = prevMonth(month)
-  const prevFridays = weeksInMonth(store, prev)
-  const teams = teamsForMonth(store, month)
+export function computeBoard(store: Store, date: string, view: View): Board {
+  const friday = fridayOf(date)
+  const month = monthOf(friday)
+  const teamMap = teamsForMonth(store, month)
+  const monthWeeks = weeksInMonth(store, month)
+  const prevFridays = view === 'week' ? [addDays(friday, -7)] : weeksInMonth(store, prevMonth(month))
 
-  const rows: BoardRow[] = store.people
-    .filter((p) => p.active !== false)
-    .map((p) => {
-      const week = pointsFor(store, p.id, weekFridays)
-      const monthPoints = pointsFor(store, p.id, monthFridays)
-      const jobsMonth = monthFridays.reduce((s, f) => s + (store.scores[f]?.[p.id]?.jobs ?? 0), 0)
-      const fwaMonth = monthFridays.reduce((s, f) => s + (store.scores[f]?.[p.id]?.fwa ?? 0), 0)
-      return {
-        id: p.id,
-        name: p.name,
-        role: p.role,
-        team: teams[p.id] ?? 'red',
-        rank: 0,
-        week: week.total,
-        month: monthPoints.total,
-        points: opts.view === 'week' ? week.total : monthPoints.total,
-        behind: 0,
-        jobsMonth,
-        fwaMonth,
-        entered: opts.view === 'week' ? week.entered : monthPoints.entered,
-      }
-    })
-
-  rows.sort((a, b) => b.points - a.points || a.name.localeCompare(b.name))
-  rows.forEach((r, i) => {
-    r.rank = i + 1
-    r.behind = i === 0 ? 0 : rows[0].points - r.points
+  const active = store.people.filter((p) => p.active !== false)
+  const base = active.map((p) => {
+    const week = pointsFor(store, p.id, [friday])
+    const monthPts = pointsFor(store, p.id, monthWeeks)
+    const prior = pointsFor(store, p.id, prevFridays)
+    let jobsMonth = 0
+    let fwaMonth = 0
+    for (const f of monthWeeks) {
+      jobsMonth += store.scores[f]?.[p.id]?.jobs ?? 0
+      fwaMonth += store.scores[f]?.[p.id]?.fwa ?? 0
+    }
+    const points = view === 'week' ? week.total : monthPts.total
+    const current = view === 'week' ? week.entered : monthPts.entered
+    return {
+      id: p.id,
+      name: p.name,
+      role: p.role,
+      team: teamMap[p.id] ?? 'red',
+      week: week.total,
+      month: monthPts.total,
+      points,
+      entered: current,
+      jobsMonth,
+      fwaMonth,
+      prior: prior.entered && current ? points - prior.total : null,
+    }
   })
 
-  const teamByKey = new Map<TeamKey, TeamSummary>()
-  for (const key of ['red', 'blue'] as const) {
-    teamByKey.set(key, {
+  const sorted = [...base].sort((a, b) => b.points - a.points || a.name.localeCompare(b.name))
+  const top = sorted[0]?.points ?? 0
+  let lastPts = Number.NaN
+  let lastRank = 0
+  const rows: BoardRow[] = sorted.map((r, i) => {
+    const rank = r.points === lastPts ? lastRank : i + 1
+    lastPts = r.points
+    lastRank = rank
+    const { prior: _prior, ...rest } = r
+    return { ...rest, rank, behind: top - r.points }
+  })
+
+  const teams: TeamSummary[] = (['red', 'blue'] as TeamKey[]).map((key) => {
+    const members = rows.filter((r) => r.team === key)
+    const week = members.reduce((s, r) => s + r.week, 0)
+    const monthPts = members.reduce((s, r) => s + r.month, 0)
+    return {
       key,
       name: key === 'red' ? store.settings.team1 : store.settings.team2,
-      week: 0,
-      month: 0,
-      points: 0,
-      techs: 0,
-      assts: 0,
-      jobsMonth: 0,
-    })
-  }
-  for (const r of rows) {
-    const t = teamByKey.get(r.team)!
-    t.week += r.week
-    t.month += r.month
-    t.points += r.points
-    if (r.role === 'tech') t.techs++
-    else t.assts++
-    t.jobsMonth += r.jobsMonth
-  }
-  const teamSummaries = Array.from(teamByKey.values())
+      week,
+      month: monthPts,
+      points: view === 'week' ? week : monthPts,
+      techs: members.filter((m) => m.role === 'tech').length,
+      assts: members.filter((m) => m.role === 'asst').length,
+      jobsMonth: members.reduce((s, r) => s + r.jobsMonth, 0),
+    }
+  })
 
-  // ✅ correct even when the leader is Blue
-  const leader = teamSummaries[0].points === teamSummaries[1].points ? 'tie' : teamSummaries[0].points > teamSummaries[1].points ? teamSummaries[0].key : teamSummaries[1].key
+  const [red, blue] = teams
+  const anyScores = rows.some((r) => r.entered)
+  const leader = !anyScores ? null : red.points === blue.points ? 'tie' : red.points > blue.points ? 'red' : 'blue'
 
-  const bestTech = [...rows].filter((r) => r.role === 'tech').sort((a, b) => b.points - a.points || a.name.localeCompare(b.name))[0]
-  const bestAsst = [...rows].filter((r) => r.role === 'asst').sort((a, b) => b.points - a.points || a.name.localeCompare(b.name))[0]
-
-  let improved = null
-  for (const r of rows) {
-    const prevPoints = pointsFor(store, r.id, prevFridays).total
-    const gain = r.month - prevPoints
-    if (!improved || gain > improved.gain!) improved = { ...r, gain }
+  const best = (role: Role): Award => {
+    const r = rows.find((x) => x.role === role && x.entered)
+    return r ? { name: r.name, points: r.points, team: r.team } : null
   }
+  const improvedCandidate = base
+    .filter((r) => r.prior !== null)
+    .sort((a, b) => (b.prior ?? 0) - (a.prior ?? 0))[0]
 
   return {
-    view: opts.view,
+    view,
     friday,
     month,
     weekLabel: weekLabel(friday),
     monthLabel: monthLabel(month),
     startDate: store.settings.startDate,
     rows,
-    teams: teamSummaries,
+    teams,
     leader,
-    margin: Math.abs(teamSummaries[0].points - teamSummaries[1].points),
+    margin: Math.abs(red.points - blue.points),
     awards: {
-      tech: bestTech ? { name: bestTech.name, points: bestTech.points, team: bestTech.team } : null,
-      asst: bestAsst ? { name: bestAsst.name, points: bestAsst.points, team: bestAsst.team } : null,
-      improved: improved ? { name: improved.name, points: improved.month, team: improved.team, gain: improved.gain } : null,
+      tech: best('tech'),
+      asst: best('asst'),
+      improved: improvedCandidate
+        ? {
+            name: improvedCandidate.name,
+            points: improvedCandidate.points,
+            team: improvedCandidate.team,
+            gain: improvedCandidate.prior ?? 0,
+          }
+        : null,
     },
     jobs: {
       completed: store.jobsCompleted?.[month] ?? rows.reduce((s, r) => s + r.jobsMonth, 0),
@@ -162,8 +168,4 @@ export function computeBoard(store: Store, opts: { view: View; friday?: string; 
     fwaTotalMonth: rows.reduce((s, r) => s + r.fwaMonth, 0),
     updatedAt: store.updatedAt,
   }
-}
-
-export function nextFriday(store: Store) {
-  return addDays(fridayOf(new Date()), 7)
 }

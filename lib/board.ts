@@ -162,7 +162,7 @@ export function computeBoard(store: Store, date: string, view: View): Board {
         : null,
     },
     jobs: {
-      completed: rows.reduce((s, r) => s + r.jobsMonth, 0),
+      completed: store.jobsCompleted?.[month] ?? rows.reduce((s, r) => s + r.jobsMonth, 0),
       projected: store.projections[month] ?? null,
     },
     fwaTotalMonth: rows.reduce((s, r) => s + r.fwaMonth, 0),

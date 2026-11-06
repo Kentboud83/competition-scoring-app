@@ -161,7 +161,7 @@ export async function saveRules(rules: Partial<Rules>): Promise<Result> {
   return { ok: true }
 }
 
-export async function saveSettings(input: { team1: string; team2: string; projection: string; month: string }): Promise<Result> {
+export async function saveSettings(input: { team1: string; team2: string; projection: string; jobsCompleted?: string; month: string }): Promise<Result> {
   await requireManager()
   await mutateStore((store) => {
     const t1 = cleanName(input.team1)
@@ -172,6 +172,13 @@ export async function saveSettings(input: { team1: string; team2: string; projec
       const n = Number(input.projection)
       if (input.projection === '') delete store.projections[input.month]
       else if (Number.isFinite(n) && n >= 0 && n < 100_000) store.projections[input.month] = Math.round(n)
+      if (input.jobsCompleted !== undefined && input.jobsCompleted !== '') {
+        const c = Number(input.jobsCompleted)
+        if (Number.isFinite(c) && c >= 0 && c < 100_000) {
+          if (!store.jobsCompleted) store.jobsCompleted = {}
+          store.jobsCompleted[input.month] = Math.round(c)
+        }
+      }
     }
   })
   refreshAll()

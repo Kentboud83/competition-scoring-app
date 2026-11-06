@@ -48,6 +48,8 @@ export type Store = {
   /** Scores keyed by week-ending Friday (YYYY-MM-DD), then person id. */
   scores: Record<string, Record<string, Entry>>
   projections: Record<string, number>
+  /** Manual monthly jobs completed (YYYY-MM), set in Manage — replaces the auto-sum for the Board total. */
+  jobsCompleted: Record<string, number>
   auth: { salt?: string; hash?: string; sessions: string[] }
   updatedAt: string
 }

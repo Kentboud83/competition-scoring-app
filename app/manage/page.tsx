@@ -30,6 +30,7 @@ export default async function ManagePage() {
       rules={store.rules}
       settings={store.settings}
       projection={store.projections[month]}
+      jobsCompleted={store.jobsCompleted?.[month]}
     />
   )
 }

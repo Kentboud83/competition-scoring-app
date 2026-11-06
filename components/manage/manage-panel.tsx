@@ -31,6 +31,7 @@ export function ManagePanel({
   rules,
   settings,
   projection,
+  jobsCompleted,
 }: {
   month: string
   monthName: string
@@ -38,6 +39,7 @@ export function ManagePanel({
   rules: Rules
   settings: { team1: string; team2: string }
   projection?: number
+    jobsCompleted?: number
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
@@ -56,6 +58,7 @@ export function ManagePanel({
   )
   const [team1, setTeam1] = useState(settings.team1)
   const [team2, setTeam2] = useState(settings.team2)
+    const [jobsDone, setJobsDone] = useState(jobsCompleted !== undefined ? String(jobsCompleted) : '')
   const [proj, setProj] = useState(projection !== undefined ? String(projection) : '')
   const [passcode, setPasscode] = useState('')
 
@@ -150,7 +153,7 @@ export function ManagePanel({
       </Section>
 
       <Section title="Competition settings">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-4">
           <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
             Team 1 name
             <input className={inputCls} value={team1} onChange={(e) => setTeam1(e.target.value)} />
@@ -160,11 +163,15 @@ export function ManagePanel({
             <input className={inputCls} value={team2} onChange={(e) => setTeam2(e.target.value)} />
           </label>
           <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-            {monthName} projected jobs
+            {monthName} total jobs
             <input className={inputCls} type="number" inputMode="numeric" min={0} value={proj} onChange={(e) => setProj(e.target.value)} />
           </label>
+                    <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+                                Jobs completed                    
+                                <input className={inputCls} type="number" inputMode="numeric" min={0} value={jobsDone} onChange={(e) => setJobsDone(e.target.value)} />
+                    </label>
         </div>
-        <Button disabled={pending} onClick={() => run(() => saveSettings({ team1, team2, projection: proj, month }), 'Settings saved')}>
+        <Button disabled={pending} onClick={() => run(() => saveSettings({ team1, team2, projection: proj, jobsCompleted: jobsDone, month }), 'Settings saved')}>
           Save settings
         </Button>
       </Section>

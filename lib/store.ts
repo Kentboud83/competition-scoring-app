@@ -1,9 +1,17 @@
 import 'server-only'
+
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+
 import seed from './seed.json'
 import { DEFAULT_RULES } from './scoring'
 import type { Store } from './types'
+
+const KV_KEY = 'weekly-showdown'
+
+const useKv = Boolean(
+  process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN,
+)
 
 const FILE = process.env.VERCEL
   ? '/tmp/weekly-showdown.json'
@@ -24,6 +32,14 @@ function initialStore(): Store {
 }
 
 export async function readStore(): Promise<Store> {
+  if (useKv) {
+    try {
+      const { kv } = await import('@vercel/kv')
+      return (await kv.get<Store>(KV_KEY)) ?? initialStore()
+    } catch {
+      return initialStore()
+    }
+  }
   try {
     const raw = await fs.readFile(FILE, 'utf8')
     return JSON.parse(raw) as Store
@@ -34,18 +50,24 @@ export async function readStore(): Promise<Store> {
 
 let queue: Promise<unknown> = Promise.resolve()
 
-/** Serializes writes so concurrent saves never clobber each other. */
-export function mutateStore<T>(fn: (store: Store) => T | Promise<T>): Promise<T> {
-  const run = queue.then(async () => {
+export function mutateStore(
+  fn: (store: Store) => void | Promise<void>,
+): Promise<Store> {
+  const task = queue.then(async () => {
     const store = await readStore()
-    const result = await fn(store)
+    await fn(store)
     store.updatedAt = new Date().toISOString()
-    await fs.mkdir(path.dirname(FILE), { recursive: true })
-    const tmp = `${FILE}.${process.pid}.tmp`
-    await fs.writeFile(tmp, JSON.stringify(store))
-    await fs.rename(tmp, FILE)
-    return result
+    if (useKv) {
+      const { kv } = await import('@vercel/kv')
+      await kv.set(KV_KEY, store)
+    } else {
+      const tmp = `${FILE}.tmp-${process.pid}`
+      await fs.mkdir(path.dirname(FILE), { recursive: true })
+      await fs.writeFile(tmp, JSON.stringify(store, null, 2))
+      await fs.rename(tmp, FILE)
+    }
+    return store
   })
-  queue = run.catch(() => undefined)
-  return run
+  queue = task.catch(() => {})
+  return task
 }

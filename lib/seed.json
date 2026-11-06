@@ -1,0 +1,170 @@
+{
+  "settings": {
+    "startDate": "2026-11-02",
+    "team1": "Team Red",
+    "team2": "Team Blue"
+  },
+  "people": [
+    {
+      "id": "p1",
+      "name": "Austin Prosperie",
+      "role": "asst"
+    },
+    {
+      "id": "p2",
+      "name": "Isaiah English",
+      "role": "asst"
+    },
+    {
+      "id": "p3",
+      "name": "Kaleb Harrington",
+      "role": "tech"
+    },
+    {
+      "id": "p4",
+      "name": "Lance M Louque",
+      "role": "tech"
+    },
+    {
+      "id": "p5",
+      "name": "Logan D Miller",
+      "role": "tech"
+    },
+    {
+      "id": "p6",
+      "name": "Muhammed Makke",
+      "role": "tech"
+    },
+    {
+      "id": "p7",
+      "name": "Paul H Ruckman",
+      "role": "tech"
+    },
+    {
+      "id": "p8",
+      "name": "Billie White",
+      "role": "tech"
+    },
+    {
+      "id": "p9",
+      "name": "Brandee Taylor",
+      "role": "asst"
+    },
+    {
+      "id": "p10",
+      "name": "Don Van Norman",
+      "role": "tech"
+    },
+    {
+      "id": "p11",
+      "name": "Evans Bourque",
+      "role": "asst"
+    },
+    {
+      "id": "p12",
+      "name": "Kayden Lapointe",
+      "role": "asst"
+    },
+    {
+      "id": "p13",
+      "name": "Kent F Smith",
+      "role": "asst"
+    },
+    {
+      "id": "p14",
+      "name": "Seth R Thibodeaux",
+      "role": "tech"
+    }
+  ],
+  "teams": {
+    "2026-11": {
+      "p1": "red",
+      "p2": "blue",
+      "p3": "red",
+      "p4": "blue",
+      "p5": "blue",
+      "p6": "red",
+      "p7": "blue",
+      "p8": "red",
+      "p9": "blue",
+      "p10": "red",
+      "p11": "red",
+      "p12": "red",
+      "p13": "blue",
+      "p14": "blue"
+    }
+  },
+  "scores": {
+    "2026-11-06": {
+      "p1": {
+        "driving": 100,
+        "jobs": 1,
+        "highGp": 1
+      },
+      "p2": {
+        "driving": 100,
+        "jobs": 4,
+        "highGp": 2
+      },
+      "p3": {
+        "driving": 99,
+        "jobs": 1,
+        "highGp": 1
+      },
+      "p4": {
+        "driving": 95
+      },
+      "p5": {
+        "driving": 99,
+        "jobs": 2,
+        "fwa": 3,
+        "highGp": 1
+      },
+      "p6": {
+        "driving": 99,
+        "jobs": 1,
+        "fwa": 1,
+        "highGp": 1
+      },
+      "p7": {
+        "driving": 98,
+        "jobs": 4,
+        "highGp": 2,
+        "bonus": 5
+      },
+      "p8": {
+        "driving": 99
+      },
+      "p9": {
+        "driving": 100
+      },
+      "p10": {
+        "driving": 99,
+        "jobs": 1,
+        "highGp": 1,
+        "onQuote": 1
+      },
+      "p11": {
+        "driving": 100,
+        "bonus": 5
+      },
+      "p12": {
+        "driving": 100,
+        "jobs": 2,
+        "highGp": 1
+      },
+      "p13": {
+        "driving": 96,
+        "jobs": 1,
+        "fwa": 1,
+        "highGp": 1
+      },
+      "p14": {
+        "driving": 95
+      }
+    }
+  },
+  "projections": {
+    "2026-11": 119
+  }
+}

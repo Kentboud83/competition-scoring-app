@@ -26,6 +26,7 @@ function initialStore(): Store {
     redraw: { '2026-11': 7 },
     scores: seed.scores as Store['scores'],
     projections: seed.projections,
+    jobsCompleted: {},
     auth: { sessions: [] },
     updatedAt: new Date().toISOString(),
   }

@@ -12,7 +12,6 @@ export const metadata: Metadata = { title: 'Manage · The Weekly Showdown' }
 export default async function ManagePage() {
   const store = await readStore()
   if (!(await isManager())) return <ManagerSignIn firstRun={!store.auth.hash} />
-
   let today = todayISO()
   if (today < store.settings.startDate) today = store.settings.startDate
   const month = fridayOf(today).slice(0, 7)
@@ -21,7 +20,6 @@ export default async function ManagePage() {
     .filter((p) => p.active !== false)
     .map((p) => ({ ...p, team: teams[p.id] ?? 'red' }))
     .sort((a, b) => a.name.localeCompare(b.name))
-
   return (
     <ManagePanel
       month={month}
@@ -31,6 +29,7 @@ export default async function ManagePage() {
       settings={store.settings}
       projection={store.projections[month]}
       jobsCompleted={store.jobsCompleted?.[month]}
+      views={typeof store.views === 'number' ? store.views : 0}
     />
   )
 }

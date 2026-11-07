@@ -8,6 +8,7 @@ import { addDays, nextMonth, prevMonth } from '@/lib/dates'
 import type { View } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Awards } from './awards'
+import { OpeningCelebration } from './opening-celebration'
 import { Rankings } from './rankings'
 import { TeamBattle } from './team-battle'
 
@@ -37,6 +38,7 @@ export function LiveBoard() {
 
   return (
     <div className="flex flex-col gap-5">
+      <OpeningCelebration />
       <div className="flex flex-col gap-3">
         <div role="tablist" aria-label="Scoring period" className="grid grid-cols-2 rounded-xl bg-secondary p-1">
           {(['week', 'month'] as View[]).map((v) => (

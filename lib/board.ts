@@ -82,8 +82,9 @@ const clean = (n: number) => {
 // view's Fridays). The lines' points add up to scoreEntry summed over the
 // same entries, because each line uses the same store rules as scoreEntry.
 // Driving is special: it is a score per week, not a count, so its line shows
-// the points total for the period and how many weeks were safe vs unsafe at
-// the driving cutoff, instead of summing the raw driving scores.
+// the points total for the period and how many weeks were perfect (100),
+// safe (at/above the cutoff, below 100) vs unsafe at the driving cutoff,
+// instead of summing the raw driving scores.
 // Bonus is 1:1 in scoreEntry (there is no bonus rule value), so its rate is 1.
 export function computeBreakdown(entries: Entry[], rules: Rules): BreakdownLine[] {
   const rates: Record<string, number> = {
@@ -103,10 +104,14 @@ export function computeBreakdown(entries: Entry[], rules: Rules): BreakdownLine[
     if (field.key === 'driving') {
       let safeWeeks = 0
       let unsafeWeeks = 0
+      let perfectWeeks = 0
       let drivingPoints = 0
       for (const e of entries) {
         if (e.driving == null) continue
-        if (e.driving >= rules.drivingCutoff) {
+        if (e.driving === 100) {
+          perfectWeeks += 1
+          drivingPoints += rules.drivingPerfect
+        } else if (e.driving >= rules.drivingCutoff) {
           safeWeeks += 1
           drivingPoints += rules.drivingSafe
         } else {
@@ -114,14 +119,15 @@ export function computeBreakdown(entries: Entry[], rules: Rules): BreakdownLine[
           drivingPoints += rules.drivingUnsafe
         }
       }
-      if (safeWeeks > 0 || unsafeWeeks > 0) {
+      if (safeWeeks > 0 || unsafeWeeks > 0 || perfectWeeks > 0) {
         const parts: string[] = []
+        if (perfectWeeks > 0) parts.push(`${perfectWeeks} perfect week${perfectWeeks === 1 ? '' : 's'}`)
         if (safeWeeks > 0) parts.push(`${safeWeeks} safe week${safeWeeks === 1 ? '' : 's'}`)
         if (unsafeWeeks > 0) parts.push(`${unsafeWeeks} unsafe week${unsafeWeeks === 1 ? '' : 's'}`)
         lines.push({
           key: 'driving',
           label: 'Driving',
-          raw: safeWeeks + unsafeWeeks,
+          raw: safeWeeks + unsafeWeeks + perfectWeeks,
           points: clean(drivingPoints),
           detail: parts.join(', '),
         })

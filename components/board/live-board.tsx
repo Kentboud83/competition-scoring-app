@@ -1,8 +1,9 @@
 'use client'
 
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import useSWR from 'swr'
+import { recordView } from '@/app/actions'
 import type { Board } from '@/lib/board'
 import { addDays, nextMonth, prevMonth } from '@/lib/dates'
 import type { View } from '@/lib/types'
@@ -27,6 +28,19 @@ export function LiveBoard() {
     revalidateOnFocus: true,
     keepPreviousData: true,
   })
+
+  // Count one view per browser session when the Board first mounts.
+  // sessionStorage is per tab, so in-app tab switches, Board polls/refreshes
+  // and same-session reloads do not add extra counts; a fresh tab counts again.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('view-recorded')) return
+      sessionStorage.setItem('view-recorded', '1')
+      recordView().catch(() => {})
+    } catch {
+      // A failed count must never break the Board load.
+    }
+  }, [])
 
   const step = (dir: 1 | -1) => {
     if (!data) return

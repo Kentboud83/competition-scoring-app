@@ -81,7 +81,7 @@ export function Rankings({ board }: { board: Board }) {
                 <span
                   className={cn(
                     'flex size-8 shrink-0 items-center justify-center rounded-full font-display text-lg font-bold tabular-nums',
-                    r.rank === 1 && r.entered ? 'bg-primary text-primary-foreground' : r.rank <= 3 && r.entered ? 'bg-secondary text-secondary-foreground' : 'bg-secondary/40 text-muted-foreground',
+                    r.rank === 1 && r.entered ? 'bg-primary text-primary-foreground' : r.rank <= 3 && r.entered ? 'bg-secondary text-foreground' : 'text-muted-foreground',
                   )}
                 >
                   <span className="sr-only">Rank</span>
@@ -99,7 +99,7 @@ export function Rankings({ board }: { board: Board }) {
                   <p className={cn('font-display text-2xl font-bold tabular-nums leading-none', !r.entered && 'text-muted-foreground')}>
                     {r.entered ? formatPts(r.points) : '—'}
                   </p>
-                  <p className="mt-1 text-[11px] leading-none text-muted-foreground">{r.entered ? 'pts' : 'no scores'}</p>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">pts</p>
                 </div>
                 <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} aria-hidden="true" />
               </button>
@@ -139,5 +139,12 @@ export function Rankings({ board }: { board: Board }) {
 }
 
 function rankWithin(rows: Board['rows']) {
-  return rows.map((r, i) => ({ ...r, rank: i + 1, behind: (rows[0]?.points ?? 0) - r.points }))
+  const top = rows[0]?.points ?? 0
+  let last = Number.NaN
+  let rank = 0
+  return rows.map((r, i) => {
+    if (r.points !== last) rank = i + 1
+    last = r.points
+    return { ...r, rank, behind: top - r.points }
+  })
 }

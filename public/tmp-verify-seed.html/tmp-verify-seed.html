@@ -7,19 +7,35 @@
 <body>
 <h1>Temporary verification seed</h1>
 <p id="status">Seeding last-seen team scores for the score-change animation check, then opening the Board. This file is temporary and will be deleted right after verification.</p>
+<p id="diag">Diagnostics pending...</p>
+<p><a href="/">Open the Board now</a></p>
 <script>
+  function diagText() {
+    var reduce = false, noPref = false;
+    try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+    try { noPref = window.matchMedia('(prefers-reduced-motion: no-preference)').matches; } catch (e) {}
+    return 'reduced-motion reduce=' + reduce + ' no-preference=' + noPref +
+      ' | stored-before=' + localStorage.getItem('last-seen-team-scores') +
+      ' | session-guard=' + sessionStorage.getItem('team-score-change-played') +
+      ' | sound=' + localStorage.getItem('rankings-sound-on');
+  }
   try {
     var q = new URLSearchParams(location.search);
+    var before = diagText();
     var red = parseFloat(q.get('red') || '44');
     var blue = parseFloat(q.get('blue') || '31');
-    localStorage.setItem('last-seen-team-scores', JSON.stringify({ red: red, blue: blue }));
-    if (q.get('sound') === 'off') localStorage.setItem('rankings-sound-on', 'false');
-    if (q.get('sound') === 'on') localStorage.setItem('rankings-sound-on', 'true');
+    if (q.get('probe') !== '1') {
+      localStorage.setItem('last-seen-team-scores', JSON.stringify({ red: red, blue: blue }));
+      if (q.get('sound') === 'off') localStorage.setItem('rankings-sound-on', 'false');
+      if (q.get('sound') === 'on') localStorage.setItem('rankings-sound-on', 'true');
+    }
     document.getElementById('status').textContent = 'Seeded last-seen scores: Red ' + red + ' / Blue ' + blue + ' (sound=' + (q.get('sound') || 'default') + '). Opening the Board...';
+    document.getElementById('diag').textContent = 'Before seeding: ' + before + ' | After seeding: stored=' + localStorage.getItem('last-seen-team-scores');
+    var delay = parseInt(q.get('delay') || '2500', 10);
+    if (q.get('probe') !== '1') setTimeout(function () { location.replace('/'); }, delay);
   } catch (e) {
     document.getElementById('status').textContent = 'Seed failed: ' + e;
   }
-  setTimeout(function () { location.replace('/'); }, 2500);
 </script>
 </body>
 </html>

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Temporary verification seed (delete after use)</title>
+</head>
+<body>
+<h1>Temporary verification seed</h1>
+<p id="status">Seeding last-seen team scores for the score-change animation check, then opening the Board. This file is temporary and will be deleted right after verification.</p>
+<script>
+  try {
+    var q = new URLSearchParams(location.search);
+    var red = parseFloat(q.get('red') || '44');
+    var blue = parseFloat(q.get('blue') || '31');
+    localStorage.setItem('last-seen-team-scores', JSON.stringify({ red: red, blue: blue }));
+    if (q.get('sound') === 'off') localStorage.setItem('rankings-sound-on', 'false');
+    if (q.get('sound') === 'on') localStorage.setItem('rankings-sound-on', 'true');
+    document.getElementById('status').textContent = 'Seeded last-seen scores: Red ' + red + ' / Blue ' + blue + ' (sound=' + (q.get('sound') || 'default') + '). Opening the Board...';
+  } catch (e) {
+    document.getElementById('status').textContent = 'Seed failed: ' + e;
+  }
+  setTimeout(function () { location.replace('/'); }, 2500);
+</script>
+</body>
+</html>

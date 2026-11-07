@@ -4,22 +4,14 @@ import { Swords } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { Board } from '@/lib/board'
 import { formatPts } from '@/lib/scoring'
+import { isSoundEnabled, playChime } from '@/lib/sound'
 import { cn } from '@/lib/utils'
 
 const LAST_SEEN_KEY = 'last-seen-team-scores'
 const SESSION_KEY = 'team-score-change-played'
-const SOUND_STORAGE_KEY = 'rankings-sound-on'
 
 type TeamKey = 'red' | 'blue'
 type LastSeenScores = { red: number; blue: number }
-
-function soundEnabled() {
-  try {
-    return window.localStorage.getItem(SOUND_STORAGE_KEY) !== 'false'
-  } catch {
-    return true
-  }
-}
 
 function fmtSigned(n: number) {
   return (n > 0 ? '+' : '') + (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100))
@@ -40,81 +32,19 @@ function recordChime(team: TeamKey, gaining: boolean, deferred: boolean) {
   }
 }
 
-// Schedule the two chime notes on a running context, then close it.
-// Celebratory (gaining): two quick ascending notes, E5 -> A5.
-// Sad (losing): two quick descending notes, C5 -> G4.
-// Same guarded Web Audio approach as the fanfare / Rankings click sound.
-function playChimeNotes(ctx: AudioContext, gaining: boolean) {
-  const notes = gaining ? [659.25, 880] : [523.25, 392]
-  const now = ctx.currentTime
-  notes.forEach((freq, i) => {
-    const start = now + i * 0.18
-    const oscillator = ctx.createOscillator()
-    const gain = ctx.createGain()
-    oscillator.type = 'triangle'
-    oscillator.frequency.setValueAtTime(freq, start)
-    gain.gain.setValueAtTime(0.0001, start)
-    gain.gain.exponentialRampToValueAtTime(0.09, start + 0.02)
-    gain.gain.exponentialRampToValueAtTime(0.001, start + 0.3)
-    oscillator.connect(gain)
-    gain.connect(ctx.destination)
-    oscillator.start(start)
-    oscillator.stop(start + 0.32)
-  })
-  window.setTimeout(() => {
-    ctx.close().catch(() => {})
-  }, 900)
-}
-
-// Try to play a team's 2-note chime now, as its ticks start. Browsers block
-// sound until the user has interacted, so when the AudioContext is
-// suspended the chime instead plays on the first tap/click/keypress,
-// exactly like the opening fanfare. One-time listeners, all guarded.
+// Play a team's 2-note chime as its ticks start, on the shared
+// AudioContext (lib/sound). Celebratory (gaining): two quick ascending
+// notes, E5 -> A5. Sad (losing): two quick descending notes, C5 -> G4.
+// When autoplay is blocked the chime plays on the first tap instead,
+// exactly like the opening fanfare. The attempt is recorded on window so
+// it can be observed in tests / diagnostics (a headless browser cannot
+// be heard); the 'deferred' flag says whether it had to wait for a
+// gesture. Any failure is swallowed: sound must never break the Board.
 function tryPlayChime(team: TeamKey, gaining: boolean) {
-  if (!soundEnabled()) return
-  try {
-    const AudioContextCtor =
-      window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-    if (!AudioContextCtor) return
-    const ctx = new AudioContextCtor()
-    const resumed = ctx.resume?.()
-    if (resumed && typeof resumed.catch === 'function') resumed.catch(() => {})
-    if (ctx.state === 'running') {
-      recordChime(team, gaining, false)
-      playChimeNotes(ctx, gaining)
-      return
-    }
-    recordChime(team, gaining, true)
-    let played = false
-    const onFirstGesture = () => {
-      if (played) return
-      played = true
-      window.removeEventListener('pointerdown', onFirstGesture)
-      window.removeEventListener('keydown', onFirstGesture)
-      const play = () => {
-        try {
-          playChimeNotes(ctx, gaining)
-        } catch {
-          ctx.close().catch(() => {})
-        }
-      }
-      try {
-        const resumedAgain = ctx.resume()
-        if (resumedAgain && typeof resumedAgain.then === 'function') {
-          resumedAgain.then(play, play)
-        } else {
-          play()
-        }
-      } catch {
-        play()
-      }
-    }
-    window.addEventListener('pointerdown', onFirstGesture)
-    window.addEventListener('keydown', onFirstGesture)
-  } catch {
-    // Sound must never break the Board.
-  }
+  if (!isSoundEnabled()) return
+  void playChime(gaining).then((result) => {
+    recordChime(team, gaining, result === 'deferred')
+  })
 }
 
 export function TeamBattle({ board }: { board: Board }) {

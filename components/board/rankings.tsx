@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { ChevronDown, Volume2, VolumeX } from 'lucide-react'
-import type { Board, BreakdownLine } from '@/lib/board'
+import type { Board } from '@/lib/board'
 import { formatPts } from '@/lib/scoring'
+import { playClick } from '@/lib/sound'
 import type { Role } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { Breakdown } from './breakdown'
 
 const SOUND_STORAGE_KEY = 'rankings-sound-on'
 
@@ -14,55 +16,6 @@ const filters: { key: 'all' | Role; label: string }[] = [
   { key: 'tech', label: 'Techs' },
   { key: 'asst', label: 'Assistants' },
 ]
-
-function fmtNum(n: number) {
-  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100)
-}
-
-function fmtSigned(n: number) {
-  return (n > 0 ? '+' : '') + fmtNum(n)
-}
-
-// Short detail under a breakdown line, e.g. "6 × +1" for jobs or
-// "1 safe week" for driving. The points for the line are shown at the right.
-function lineDetail(line: BreakdownLine) {
-  if (line.key === 'driving') return line.detail ?? ''
-  if (line.rate === 1) return fmtNum(line.raw)
-  return `${fmtNum(line.raw)} × ${fmtSigned(line.rate ?? 0)}`
-}
-
-// Short synthesized click, created only inside a tap handler so it never
-// autoplays. Opening is a slightly higher blip than closing. Under ~100ms.
-// Guarded throughout: browsers without Web Audio are unaffected and a
-// sound failure must never block expanding or closing a row.
-function playClick(opening: boolean) {
-  try {
-    if (typeof window === 'undefined') return
-    const AudioContextCtor =
-      window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-    if (!AudioContextCtor) return
-    const ctx = new AudioContextCtor()
-    const resumed = ctx.resume?.()
-    if (resumed && typeof resumed.catch === 'function') resumed.catch(() => {})
-    const oscillator = ctx.createOscillator()
-    const gain = ctx.createGain()
-    const now = ctx.currentTime
-    oscillator.type = 'sine'
-    oscillator.frequency.setValueAtTime(opening ? 720 : 520, now)
-    gain.gain.setValueAtTime(0.08, now)
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07)
-    oscillator.connect(gain)
-    gain.connect(ctx.destination)
-    oscillator.start(now)
-    oscillator.stop(now + 0.08)
-    oscillator.onended = () => {
-      ctx.close().catch(() => {})
-    }
-  } catch {
-    // Sound must never block the expand/close.
-  }
-}
 
 // Haptic feedback, independent of the sound toggle: it still vibrates when
 // sound is off, on devices that support it. Guarded so devices/browsers
@@ -115,9 +68,13 @@ export function Rankings({ board }: { board: Board }) {
 
   function handleRowClick(rowId: string, isOpen: boolean) {
     const opening = !isOpen
-    if (soundOn) playClick(opening)
-    vibrate(opening)
+    // Update the UI first so the row expands immediately. The click sound
+    // plays asynchronously (the shared AudioContext resumes in the
+    // background) and must never delay the expand; creating a fresh
+    // AudioContext inside the tap handler is what made taps lag.
     setOpenId(opening ? rowId : null)
+    vibrate(opening)
+    if (soundOn) void playClick(opening)
   }
 
   return (
@@ -194,33 +151,7 @@ export function Rankings({ board }: { board: Board }) {
                 </div>
                 <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} aria-hidden="true" />
               </button>
-              {open && (
-                <div id={`breakdown-${r.id}`} className="border-t border-border bg-muted/40 px-4 py-3">
-                  {breakdown.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No scores entered yet for this period.</p>
-                  ) : (
-                    <>
-                      <ul className="flex flex-col">
-                        {breakdown.map((line) => (
-                          <li key={line.key} className="flex items-center justify-between gap-3 border-b border-border/60 py-1.5 last:border-b-0">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium">{line.label}</p>
-                              <p className="text-xs text-muted-foreground">{lineDetail(line)}</p>
-                            </div>
-                            <p className={cn('shrink-0 font-display text-base font-bold tabular-nums', line.points < 0 ? 'text-destructive' : 'text-foreground')}>
-                              {formatPts(line.points)} pts
-                            </p>
-                          </li>
-                        ))}
-                      </ul>
-                      <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
-                        <p className="text-sm font-bold">Total</p>
-                        <p className="font-display text-base font-bold tabular-nums">{formatPts(r.points)} pts</p>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
+              {open && <Breakdown id={`breakdown-${r.id}`} breakdown={breakdown} points={r.points} />}
             </li>
           )
         })}

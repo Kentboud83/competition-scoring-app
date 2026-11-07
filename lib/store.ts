@@ -8,11 +8,9 @@ import { DEFAULT_RULES } from './scoring'
 import type { Store } from './types'
 
 const KV_KEY = 'weekly-showdown'
-
 const useKv = Boolean(
   process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN,
 )
-
 const FILE = process.env.VERCEL
   ? '/tmp/weekly-showdown.json'
   : path.join(process.cwd(), '.data', 'weekly-showdown.json')
@@ -40,7 +38,14 @@ export async function readStore(): Promise<Store> {
       const stored = (await kv.get<Store>(KV_KEY)) ?? initialStore()
       // The stored document predates the view counter, so a missing views
       // value is 0 — never crash or reset scores when it is absent.
-      return { ...stored, views: typeof stored.views === 'number' ? stored.views : 0 }
+      // The stored rules also predate the bonus point values, so merge
+      // DEFAULT_RULES underneath: new fields default to Kent's values
+      // while any custom point values already stored are preserved.
+      return {
+        ...stored,
+        rules: { ...DEFAULT_RULES, ...(stored.rules ?? {}) },
+        views: typeof stored.views === 'number' ? stored.views : 0,
+      }
     } catch {
       return initialStore()
     }
@@ -48,7 +53,11 @@ export async function readStore(): Promise<Store> {
   try {
     const raw = await fs.readFile(FILE, 'utf8')
     const stored = JSON.parse(raw) as Store
-    return { ...stored, views: typeof stored.views === 'number' ? stored.views : 0 }
+    return {
+      ...stored,
+      rules: { ...DEFAULT_RULES, ...(stored.rules ?? {}) },
+      views: typeof stored.views === 'number' ? stored.views : 0,
+    }
   } catch {
     return initialStore()
   }
@@ -67,10 +76,8 @@ export function mutateStore(
       const { kv } = await import('@vercel/kv')
       await kv.set(KV_KEY, store)
     } else {
-      const tmp = `${FILE}.tmp-${process.pid}`
       await fs.mkdir(path.dirname(FILE), { recursive: true })
-      await fs.writeFile(tmp, JSON.stringify(store, null, 2))
-      await fs.rename(tmp, FILE)
+      await fs.writeFile(FILE, JSON.stringify(store))
     }
     return store
   })
@@ -78,25 +85,9 @@ export function mutateStore(
   return task
 }
 
-/** Increment the app view count by 1, preserving everything else in the store. */
 export async function incrementViews(): Promise<number> {
-  const task = queue.then(async () => {
-    const store = await readStore()
-    const next = (typeof store.views === 'number' && Number.isFinite(store.views) ? store.views : 0) + 1
-    store.views = next
-    // Do not touch updatedAt: opening the app is not a score change, so the
-    // Board's "Live · updated …" time must not move on a view.
-    if (useKv) {
-      const { kv } = await import('@vercel/kv')
-      await kv.set(KV_KEY, store)
-    } else {
-      const tmp = `${FILE}.tmp-${process.pid}`
-      await fs.mkdir(path.dirname(FILE), { recursive: true })
-      await fs.writeFile(tmp, JSON.stringify(store, null, 2))
-      await fs.rename(tmp, FILE)
-    }
-    return next
+  const store = await mutateStore((s) => {
+    s.views = (typeof s.views === 'number' ? s.views : 0) + 1
   })
-  queue = task.catch(() => {})
-  return task
+  return store.views
 }

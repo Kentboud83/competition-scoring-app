@@ -4,6 +4,7 @@ export const DEFAULT_RULES: Rules = {
   drivingCutoff: 96,
   drivingSafe: 1,
   drivingUnsafe: -2,
+  drivingPerfect: 2,
   job: 1,
   fwa: 1,
   callback: -2,
@@ -41,6 +42,7 @@ export const RULE_FIELDS: { key: keyof Rules; label: string; help: (r: Rules) =>
   { key: 'drivingCutoff', label: 'Driving score cutoff', step: 1, help: (r) => `A weekly driving score of ${r.drivingCutoff} or higher counts as a safe week.` },
   { key: 'drivingSafe', label: 'Driving at/above cutoff', step: 0.25, help: (r) => `Points for a driving score of ${r.drivingCutoff}+.` },
   { key: 'drivingUnsafe', label: 'Driving below cutoff', step: 0.25, help: (r) => `Points for a driving score under ${r.drivingCutoff}.` },
+  { key: 'drivingPerfect', label: 'Driving score of 100 (perfect)', step: 0.25, help: () => 'Points for a perfect driving score of 100.' },
   { key: 'job', label: 'Job completed', step: 0.25, help: () => 'Points for every job you complete.' },
   { key: 'fwa', label: 'FWA turned in', step: 0.25, help: () => 'Points for every Field Work Authorization turned in.' },
   { key: 'callback', label: 'Warranty callback', step: 0.25, help: () => 'Points for every warranty callback.' },
@@ -67,7 +69,7 @@ export function scoreEntry(entry: Entry | undefined, rules: Rules) {
   if (!entry) return 0
   const n = (k: StatKey) => entry[k] ?? 0
   const driving =
-    entry.driving === undefined ? 0 : entry.driving >= rules.drivingCutoff ? rules.drivingSafe : rules.drivingUnsafe
+    entry.driving === undefined ? 0 : entry.driving === 100 ? rules.drivingPerfect : entry.driving >= rules.drivingCutoff ? rules.drivingSafe : rules.drivingUnsafe
   return (
     driving +
     n('jobs') * rules.job +

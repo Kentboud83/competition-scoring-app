@@ -25,6 +25,7 @@ export type Rules = {
   drivingCutoff: number
   drivingSafe: number
   drivingUnsafe: number
+  drivingPerfect: number
   job: number
   fwa: number
   callback: number

@@ -35,6 +35,13 @@ export type Rules = {
   onQuote: number
   lateHour: number
   safety: number
+  bonusTrash: number
+  bonusDumpster: number
+  bonusShelf: number
+  bonusTeamDriving100: number
+  bonusVolunteer: number
+  bonusTruckInspection: number
+  bonusHitTheMark: number
 }
 
 export type Store = {

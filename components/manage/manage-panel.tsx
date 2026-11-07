@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import { addPerson, changePasscode, redrawTeams, removePerson, saveRules, saveSettings, setTeam, signOut } from '@/app/actions'
 import { Button } from '@/components/ui/button'
-import { RULE_FIELDS } from '@/lib/scoring'
+import { BONUS_RULE_FIELDS, RULE_FIELDS } from '@/lib/scoring'
 import type { Person, Role, Rules, TeamKey } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -185,6 +185,22 @@ export function ManagePanel({
       <Section title="Point values" description="Changes recalculate every score on the board instantly.">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {RULE_FIELDS.map((f) => (
+            <label key={f.key} className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+              {f.label}
+              <input
+                className={cn(inputCls, 'tabular-nums')}
+                type="number"
+                inputMode="decimal"
+                step={f.step}
+                value={ruleDraft[f.key] ?? ''}
+                onChange={(e) => setRuleDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+              />
+            </label>
+          ))}
+        </div>
+        <h3 className="text-sm font-semibold">Bonus points</h3>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {BONUS_RULE_FIELDS.map((f) => (
             <label key={f.key} className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
               {f.label}
               <input

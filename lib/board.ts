@@ -84,6 +84,7 @@ const clean = (n: number) => {
 // Driving is special: it is a score per week, not a count, so its line shows
 // the points total for the period and how many weeks were safe vs unsafe at
 // the driving cutoff, instead of summing the raw driving scores.
+// Bonus is 1:1 in scoreEntry (there is no bonus rule value), so its rate is 1.
 export function computeBreakdown(entries: Entry[], rules: Rules): BreakdownLine[] {
   const rates: Record<string, number> = {
     jobs: rules.job,
@@ -95,7 +96,7 @@ export function computeBreakdown(entries: Entry[], rules: Rules): BreakdownLine[
     onQuote: rules.onQuote,
     hoursOver: rules.lateHour,
     safety: rules.safety,
-    bonus: rules.bonus,
+    bonus: 1,
   }
   const lines: BreakdownLine[] = []
   for (const field of STAT_FIELDS) {

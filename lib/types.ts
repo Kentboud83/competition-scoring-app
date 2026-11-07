@@ -50,6 +50,8 @@ export type Store = {
   projections: Record<string, number>
   /** Manual monthly jobs completed (YYYY-MM), set in Manage — replaces the auto-sum for the Board total. */
   jobsCompleted: Record<string, number>
+  /** Total number of times the app has been opened (all visitors, including signed-out). Shown in Manage only. */
+  views: number
   auth: { salt?: string; hash?: string; sessions: string[] }
   updatedAt: string
 }

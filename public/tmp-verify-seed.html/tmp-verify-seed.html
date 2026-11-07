@@ -9,6 +9,7 @@
 <p id="status">Seeding last-seen team scores for the score-change animation check, then opening the Board. This file is temporary and will be deleted right after verification.</p>
 <p id="diag">Diagnostics pending...</p>
 <p><a href="/">Open the Board now</a></p>
+<div id="log"></div>
 <script>
   function diagText() {
     var reduce = false, noPref = false;
@@ -31,8 +32,45 @@
     }
     document.getElementById('status').textContent = 'Seeded last-seen scores: Red ' + red + ' / Blue ' + blue + ' (sound=' + (q.get('sound') || 'default') + '). Opening the Board...';
     document.getElementById('diag').textContent = 'Before seeding: ' + before + ' | After seeding: stored=' + localStorage.getItem('last-seen-team-scores');
-    var delay = parseInt(q.get('delay') || '2500', 10);
-    if (q.get('probe') !== '1') setTimeout(function () { location.replace('/'); }, delay);
+    if (q.get('harness') === '1') {
+      var frame = document.createElement('iframe');
+      frame.src = '/';
+      frame.style.width = '100%';
+      frame.style.height = '650px';
+      frame.style.border = '2px solid #888';
+      document.body.appendChild(frame);
+      var logEl = document.getElementById('log');
+      var start = Date.now();
+      var last = '';
+      setInterval(function () {
+        try {
+          var win = frame.contentWindow;
+          var doc = frame.contentDocument;
+          var state = 'no team battle yet';
+          if (doc) {
+            var battle = doc.querySelector('[data-testid="team-battle"]');
+            if (battle) state = battle.textContent.replace(/\s+/g, ' ').trim();
+            else if (doc.body) state = 'loading: ' + doc.body.textContent.replace(/\s+/g, ' ').slice(0, 90);
+          }
+          var chimes = '[]';
+          try { if (win && win.__teamScoreChimes) chimes = JSON.stringify(win.__teamScoreChimes); } catch (e2) {}
+          var line = ((Date.now() - start) / 1000).toFixed(1) + 's | ' + state + ' | chimes=' + chimes;
+          if (line !== last) {
+            last = line;
+            var p = document.createElement('div');
+            p.textContent = line;
+            logEl.appendChild(p);
+          }
+        } catch (e) {
+          var p2 = document.createElement('div');
+          p2.textContent = 'harness error: ' + e;
+          logEl.appendChild(p2);
+        }
+      }, 150);
+    } else {
+      var delay = parseInt(q.get('delay') || '2500', 10);
+      if (q.get('probe') !== '1') setTimeout(function () { location.replace('/'); }, delay);
+    }
   } catch (e) {
     document.getElementById('status').textContent = 'Seed failed: ' + e;
   }

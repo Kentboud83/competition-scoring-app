@@ -40,7 +40,7 @@ export function ManagePanel({
   rules: Rules
   settings: { team1: string; team2: string }
   projection?: number
-  jobsCompleted?: number
+    jobsCompleted?: number
   views?: number
 }) {
   const router = useRouter()
@@ -52,6 +52,7 @@ export function ManagePanel({
       setMessage(res.ok ? success : (res.error ?? 'Something went wrong.'))
       if (res.ok) router.refresh()
     })
+
   const [newName, setNewName] = useState('')
   const [newRole, setNewRole] = useState<Role>('tech')
   const [ruleDraft, setRuleDraft] = useState<Record<string, string>>(() =>
@@ -59,113 +60,106 @@ export function ManagePanel({
   )
   const [team1, setTeam1] = useState(settings.team1)
   const [team2, setTeam2] = useState(settings.team2)
-  const [jobsDone, setJobsDone] = useState(jobsCompleted !== undefined ? String(jobsCompleted) : '')
+    const [jobsDone, setJobsDone] = useState(jobsCompleted !== undefined ? String(jobsCompleted) : '')
   const [proj, setProj] = useState(projection !== undefined ? String(projection) : '')
   const [passcode, setPasscode] = useState('')
+
   const count = (team: TeamKey, role: Role) => people.filter((p) => p.team === team && p.role === role).length
-  const monthKey = `${month}-15`
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <p className="font-display text-2xl font-bold uppercase tracking-wide">Manage — {monthName}</p>
-          <p className="text-sm text-muted-foreground">Season running {settings.team1} vs {settings.team2}</p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => run(() => signOut(), 'Signed out.')}
-          disabled={pending}
-          className="gap-1.5"
-        >
-          <LogOut className="size-4" /> Sign out
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="font-display text-3xl font-bold uppercase tracking-wide">Manage</h1>
+        <Button variant="ghost" size="sm" onClick={() => run(signOut, 'Signed out')} className="gap-1.5">
+          <LogOut className="size-4" aria-hidden="true" />Sign out
         </Button>
       </div>
       {message && (
-        <p role="status" className="rounded-xl bg-card p-3 text-center text-sm text-foreground">
+        <p role="status" className="rounded-lg bg-secondary px-3 py-2 text-sm">
           {message}
         </p>
       )}
+
       <Section title="App views" description="Times the app has been opened">
         <p className="text-2xl font-bold tabular-nums">App views: {views}</p>
       </Section>
-      <Section title="Teams" description="Drag individual people across teams, re-randomise, or add people here.">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-team-red">{settings.team1}</span> · {count('red', 'tech')} techs · {count('red', 'asst')} assistants
+
+      <Section title={`${monthName} teams`} description="Teams are drawn randomly each month, balanced by role. Tap a person to switch teams.">
+        <div className="grid grid-cols-2 gap-2 text-center text-xs text-muted-foreground">
+          <p>
+            <span className="font-semibold text-team-red">{settings.team1}</span> · {count('red', 'tech')} techs, {count('red', 'asst')} assts
+          </p>
+          <p>
+            <span className="font-semibold text-team-blue">{settings.team2}</span> · {count('blue', 'tech')} techs, {count('blue', 'asst')} assts
+          </p>
         </div>
-        <ul className="grid gap-2 sm:grid-cols-2">
+        <ul className="flex flex-col gap-1.5">
           {people.map((p) => (
-            <li key={p.id} className="flex items-center justify-between rounded-xl border border-border bg-card p-3">
-              <div>
-                <p className="font-semibold">{p.name}</p>
-                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className={p.team === 'red' ? 'size-2.5 rounded-full bg-team-red' : 'size-2.5 rounded-full bg-team-blue'} />
-                  {p.team === 'red' ? settings.team1 : settings.team2}
-                </p>
+            <li key={p.id} className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-sm">
+                {p.name} <span className="text-muted-foreground">· {p.role === 'tech' ? 'Tech' : 'Asst'}</span>
+              </span>
+              <div className="flex rounded-lg bg-secondary p-0.5" role="group" aria-label={`Team for ${p.name}`}>
+                {(['red', 'blue'] as TeamKey[]).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    aria-pressed={p.team === t}
+                    disabled={pending}
+                    onClick={() => p.team !== t && run(() => setTeam(month, p.id, t), `${p.name} moved`)}
+                    className={cn(
+                      'rounded-md px-2.5 py-1 text-xs font-semibold',
+                      p.team === t ? (t === 'red' ? 'bg-team-red text-white' : 'bg-team-blue text-white') : 'text-muted-foreground',
+                    )}
+                  >
+                    {t === 'red' ? 'Red' : 'Blue'}
+                  </button>
+                ))}
               </div>
-              <div className="flex items-center gap-1">
-                <select
-                  className={cn('rounded-md border border-input bg-card px-2 py-1 text-sm text-foreground', pending && 'pointer-events-none opacity-50')}
-                  value={p.team}
-                  onChange={(e) => run(() => setTeam(month, p.id, e.target.value as TeamKey), 'Moved.')}
-                  disabled={pending}
-                >
-                  <option value="red">{settings.team1}</option>
-                  <option value="blue">{settings.team2}</option>
-                </select>
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Remove person"
-                  onClick={() => run(() => removePerson(p.id), 'Removed.')}
-                  disabled={pending}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
+              <button
+                type="button"
+                onClick={() => confirm(`Remove ${p.name} from the roster?`) && run(() => removePerson(p.id), `${p.name} removed`)}
+                className="rounded-md p-1.5 text-muted-foreground hover:text-destructive"
+                aria-label={`Remove ${p.name}`}
+              >
+                <Trash2 className="size-4" />
+              </button>
             </li>
           ))}
         </ul>
-        <div className="flex justify-end">
-          <Button type="button" variant="secondary" onClick={() => run(() => redrawTeams(month), 'Teams redrawn.')} disabled={pending}>
-            <Shuffle className="size-4" /> Redraw teams
-          </Button>
-        </div>
+        <Button variant="secondary" disabled={pending} onClick={() => run(() => redrawTeams(month), 'Teams re-drawn')} className="gap-1.5">
+          <Shuffle className="size-4" aria-hidden="true" />Re-draw teams
+        </Button>
       </Section>
-      <Section title="Add person" description="Add a tech or assistant to the roster.">
-        <div className="flex flex-col gap-2">
-          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+
+      <Section title="Add to roster">
+        <form
+          className="flex flex-col gap-2 sm:flex-row"
+          onSubmit={(e) => {
+            e.preventDefault()
+            run(() => addPerson(newName, newRole), `${newName} added`)
+            setNewName('')
+          }}
+        >
+          <label className="sr-only" htmlFor="new-name">
             Name
-            <input className={inputCls} value={newName} onChange={(e) => setNewName(e.target.value)} />
           </label>
-          <div className="flex items-end gap-2">
-            <label className="flex flex-1 flex-col gap-1 text-xs font-medium text-muted-foreground">
-              Role
-              <select className={inputCls} value={newRole} onChange={(e) => setNewRole(e.target.value as Role)}>
-                <option value="tech">Tech</option>
-                <option value="asst">Assistant</option>
-              </select>
-            </label>
-            <Button
-              type="button"
-              onClick={() =>
-                run(
-                  () => addPerson(newName.trim(), newRole),
-                  'Added — they appear in the Manager panel and on the penultimate Monday a full week is scored.',
-                )
-              }
-              disabled={pending || !newName.trim()}
-              className="gap-1.5"
-            >
-              <Plus className="size-4" /> Add person
-            </Button>
-          </div>
-        </div>
+          <input id="new-name" className={inputCls} placeholder="Full name" value={newName} onChange={(e) => setNewName(e.target.value)} required />
+          <label className="sr-only" htmlFor="new-role">
+            Role
+          </label>
+          <select id="new-role" className={cn(inputCls, 'sm:w-40')} value={newRole} onChange={(e) => setNewRole(e.target.value as Role)}>
+            <option value="tech">Tech</option>
+            <option value="asst">Assistant</option>
+          </select>
+          <Button type="submit" size="lg" disabled={pending} className="gap-1.5">
+            <Plus className="size-4" aria-hidden="true" />Add
+          </Button>
+        </form>
       </Section>
-      <Section title="Settings" description="Scores, projections and team names are shared across the week and month Board.">
-        <div className="grid gap-2 sm:grid-cols-2">
+
+      <Section title="Competition settings">
+        <div className="grid gap-3 sm:grid-cols-4">
           <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
             Team 1 name
             <input className={inputCls} value={team1} onChange={(e) => setTeam1(e.target.value)} />
@@ -175,82 +169,70 @@ export function ManagePanel({
             <input className={inputCls} value={team2} onChange={(e) => setTeam2(e.target.value)} />
           </label>
           <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-            Jobs completed
-            <input className={inputCls} value={jobsDone} onChange={(e) => setJobsDone(e.target.value.replace(/[^0-9]/g, '').slice(0, 7))} />
+            {monthName} total jobs
+            <input className={inputCls} type="number" inputMode="numeric" min={0} value={proj} onChange={(e) => setProj(e.target.value)} />
           </label>
           <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-            Weekly projection
-            <input className={inputCls} value={proj} onChange={(e) => setProj(e.target.value.replace(/[^0-9]/g, '').slice(0, 7))} />
+            Jobs completed
+            <input className={inputCls} type="number" inputMode="numeric" min={0} value={jobsDone} onChange={(e) => setJobsDone(e.target.value)} />
           </label>
         </div>
-        <div className="flex justify-end">
-          <Button
-            type="button"
-            onClick={() =>
-              run(
-                () =>
-                  saveSettings({
-                    team1,
-                    team2,
-                    projection: proj,
-                    jobsCompleted: jobsDone ? String(jobsDone) : '',
-                    month,
-                  }),
-                'Settings saved.',
-              )
-            }
-            disabled={pending}
-            className="gap-1.5"
-          >
-            Save changes
-          </Button>
-        </div>
+        <Button disabled={pending} onClick={() => run(() => saveSettings({ team1, team2, projection: proj, jobsCompleted: jobsDone, month }), 'Settings saved')}>
+          Save settings
+        </Button>
       </Section>
-      <Section title="Points" description={settings.team1 + ' and ' + settings.team2 + ' points. GP target: ' + rules.gpTarget + ' GP'}>
-        <div className="grid gap-2 sm:grid-cols-2">
+
+      <Section title="Point values" description="Changes recalculate every score on the board instantly.">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {RULE_FIELDS.map((f) => (
             <label key={f.key} className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
               {f.label}
               <input
-                className={inputCls}
-                value={ruleDraft[f.key]}
+                className={cn(inputCls, 'tabular-nums')}
+                type="number"
+                inputMode="decimal"
+                step={f.step}
+                value={ruleDraft[f.key] ?? ''}
                 onChange={(e) => setRuleDraft((d) => ({ ...d, [f.key]: e.target.value }))}
               />
             </label>
           ))}
         </div>
-        <div className="flex justify-end">
-          <Button
-            type="button"
-            onClick={() =>
-              run(
-                () => saveRules(Object.fromEntries(Object.entries(ruleDraft).map(([k, v]) => [k, Number(v)])) as Rules),
-                'Points updated.',
-              )
-            }
-            disabled={pending}
-          >
-            Save points
-          </Button>
-        </div>
+        <Button
+          disabled={pending}
+          onClick={() => run(() => saveRules(Object.fromEntries(Object.entries(ruleDraft).map(([k, v]) => [k, Number(v)]))), 'Point values saved')}
+        >
+          Save point values
+        </Button>
       </Section>
-      <Section title="Change passcode">
-        <div className="flex gap-2">
+
+      <Section title="Manager passcode" description="Changing it signs out every other device.">
+        <form
+          className="flex flex-col gap-2 sm:flex-row"
+          onSubmit={(e) => {
+            e.preventDefault()
+            run(() => changePasscode(passcode), 'Passcode updated')
+            setPasscode('')
+          }}
+        >
+          <label className="sr-only" htmlFor="new-passcode">
+            New passcode
+          </label>
           <input
+            id="new-passcode"
             type="password"
+            autoComplete="new-password"
+            minLength={4}
+            required
             className={inputCls}
+            placeholder="New passcode"
             value={passcode}
             onChange={(e) => setPasscode(e.target.value)}
-            placeholder="New passcode"
           />
-          <Button
-            type="button"
-            onClick={() => run(() => changePasscode(passcode), 'Passcode changed — Sign in again.')} 
-            disabled={pending || passcode.length < 4}
-          >
-            Save passcode
+          <Button type="submit" size="lg" variant="secondary" disabled={pending}>
+            Update
           </Button>
-        </div>
+        </form>
       </Section>
     </div>
   )

@@ -9,6 +9,7 @@ import { isSoundEnabled, playClick } from '@/lib/sound'
 import type { View } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Breakdown } from './breakdown'
+import { Awards } from './awards'
 
 const fetcher = (url: string) =>
   fetch(url).then((r) => {
@@ -71,11 +72,13 @@ function LeaderCard({ row, place, teamName, open, onToggle }: { row: BoardRow; p
   )
 }
 
-// Leaders: the top 3 technicians overall for the selected period, as a
-// podium — 1st on top, 2nd and 3rd below. Same This week / This month
-// toggle and board data as the Board, so the top 3 here always match the
-// Board's top 3. Tapping a leader expands the same score breakdown as
-// Rankings, with the same click sound and haptic feedback.
+// Leaders: the three award spots (Top Technician, Top Assistant
+// Technician, Most Improved) followed by the top 3 technicians overall
+// for the selected period, as a podium — 1st on top, 2nd and 3rd below.
+// Same This week / This month toggle and board data as the Board, so the
+// awards and the top 3 here always match the Board's data. Tapping a
+// leader expands the same score breakdown as Rankings, with the same
+// click sound and haptic feedback.
 export function LeadersBoard() {
   const [view, setView] = useState<View>('month')
   const [openId, setOpenId] = useState<string | null>(null)
@@ -139,52 +142,55 @@ export function LeadersBoard() {
           </div>
         </div>
       ) : board ? (
-        leaders.length === 0 ? (
-          <p className="rounded-2xl bg-card p-6 text-center text-muted-foreground">
-            No scores entered yet for this {period} — the podium is waiting for its first leaders.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {byRank(1).length > 0 && (
-              <ol className="flex flex-col gap-3">
-                {byRank(1).map((row) => (
-                  <LeaderCard
-                    key={row.id}
-                    row={row}
-                    place={PLACES[0]}
-                    teamName={board.teams.find((t) => t.key === row.team)?.name ?? ''}
-                    open={openId === row.id}
-                    onToggle={() => handleRowClick(row.id, openId === row.id)}
-                  />
-                ))}
-              </ol>
-            )}
-            {(byRank(2).length > 0 || byRank(3).length > 0) && (
-              <ol className="grid gap-3 sm:grid-cols-2">
-                {byRank(2).map((row) => (
-                  <LeaderCard
-                    key={row.id}
-                    row={row}
-                    place={PLACES[1]}
-                    teamName={board.teams.find((t) => t.key === row.team)?.name ?? ''}
-                    open={openId === row.id}
-                    onToggle={() => handleRowClick(row.id, openId === row.id)}
-                  />
-                ))}
-                {byRank(3).map((row) => (
-                  <LeaderCard
-                    key={row.id}
-                    row={row}
-                    place={PLACES[2]}
-                    teamName={board.teams.find((t) => t.key === row.team)?.name ?? ''}
-                    open={openId === row.id}
-                    onToggle={() => handleRowClick(row.id, openId === row.id)}
-                  />
-                ))}
-              </ol>
-            )}
-          </div>
-        )
+        <>
+          <Awards board={board} />
+          {leaders.length === 0 ? (
+            <p className="rounded-2xl bg-card p-6 text-center text-muted-foreground">
+              No scores entered yet for this {period} — the podium is waiting for its first leaders.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {byRank(1).length > 0 && (
+                <ol className="flex flex-col gap-3">
+                  {byRank(1).map((row) => (
+                    <LeaderCard
+                      key={row.id}
+                      row={row}
+                      place={PLACES[0]}
+                      teamName={board.teams.find((t) => t.key === row.team)?.name ?? ''}
+                      open={openId === row.id}
+                      onToggle={() => handleRowClick(row.id, openId === row.id)}
+                    />
+                  ))}
+                </ol>
+              )}
+              {(byRank(2).length > 0 || byRank(3).length > 0) && (
+                <ol className="grid gap-3 sm:grid-cols-2">
+                  {byRank(2).map((row) => (
+                    <LeaderCard
+                      key={row.id}
+                      row={row}
+                      place={PLACES[1]}
+                      teamName={board.teams.find((t) => t.key === row.team)?.name ?? ''}
+                      open={openId === row.id}
+                      onToggle={() => handleRowClick(row.id, openId === row.id)}
+                    />
+                  ))}
+                  {byRank(3).map((row) => (
+                    <LeaderCard
+                      key={row.id}
+                      row={row}
+                      place={PLACES[2]}
+                      teamName={board.teams.find((t) => t.key === row.team)?.name ?? ''}
+                      open={openId === row.id}
+                      onToggle={() => handleRowClick(row.id, openId === row.id)}
+                    />
+                  ))}
+                </ol>
+              )}
+            </div>
+          )}
+        </>
       ) : (
         <p className="rounded-2xl bg-card p-6 text-center text-muted-foreground">
           {error ? 'Could not load the leaders.' : 'Loading leaders…'}

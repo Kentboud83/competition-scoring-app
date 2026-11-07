@@ -8,7 +8,7 @@ import type { Board } from '@/lib/board'
 import { addDays, nextMonth, prevMonth } from '@/lib/dates'
 import type { View } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { Awards } from './awards'
+import { JobsProgress } from './awards'
 import { OpeningCelebration } from './opening-celebration'
 import { Rankings } from './rankings'
 import { TeamBattle } from './team-battle'
@@ -36,7 +36,7 @@ function boardFingerprint(board: Board): string {
 // toggles) or a Week/Month tap. Their internal state (Rankings' open row
 // and sound toggle, TeamBattle's catch-up animation) is preserved.
 const MemoTeamBattle = memo(TeamBattle)
-const MemoAwards = memo(Awards)
+const MemoJobsProgress = memo(JobsProgress)
 const MemoRankings = memo(Rankings)
 
 export function LiveBoard() {
@@ -51,9 +51,9 @@ export function LiveBoard() {
 
   // The Board the sections actually render. A poll (every 10s, or on
   // focus) only replaces it when the fetched payload's content really
-  // changed, so an unchanged poll never re-renders TeamBattle, Awards or
-  // Rankings — the fingerprint check above plus the memoized sections
-  // below make the poll a no-op for the UI. The poll itself is unchanged:
+  // changed, so an unchanged poll never re-renders TeamBattle, the jobs
+  // progress or Rankings — the fingerprint check above plus the memoized
+  // sections below make the poll a no-op for the UI. The poll itself is unchanged:
   // still every 10s, still revalidating on focus, still live when scores
   // move. A Week/Month/date change produces a different fingerprint, so
   // it always applies.
@@ -159,7 +159,7 @@ export function LiveBoard() {
       ) : board ? (
         <>
           <MemoTeamBattle board={board} />
-          <MemoAwards board={board} />
+          <MemoJobsProgress board={board} />
           <MemoRankings board={board} />
         </>
       ) : (

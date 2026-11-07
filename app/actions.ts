@@ -14,7 +14,7 @@ import {
 } from '@/lib/auth'
 import { fridayOf, isISODate } from '@/lib/dates'
 import { DEFAULT_RULES } from '@/lib/scoring'
-import { mutateStore, readStore } from '@/lib/store'
+import { incrementViews, mutateStore, readStore } from '@/lib/store'
 import { STAT_KEYS, type Entry, type Role, type Rules, type TeamKey } from '@/lib/types'
 
 type Result = { ok: true } | { ok: false; error: string }
@@ -213,4 +213,18 @@ export async function getStoreSnapshotForManager() {
   await requireManager()
   const store = await readStore()
   return { people: store.people.filter((p) => p.active !== false), rules: store.rules, settings: store.settings }
+}
+
+/**
+ * Count one app view (a Board open). Called once per browser session from
+ * the Board; any visitor counts, signed in or not. Fire-and-forget: a
+ * failure here must never break the Board load, and it does not revalidate
+ * any page.
+ */
+export async function recordView(): Promise<void> {
+  try {
+    await incrementViews()
+  } catch {
+    // A failed count must never break the Board load.
+  }
 }

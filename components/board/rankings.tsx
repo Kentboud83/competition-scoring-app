@@ -1,11 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Volume2, VolumeX } from 'lucide-react'
 import type { Board, BreakdownLine } from '@/lib/board'
 import { formatPts } from '@/lib/scoring'
 import type { Role } from '@/lib/types'
 import { cn } from '@/lib/utils'
+
+const SOUND_STORAGE_KEY = 'rankings-sound-on'
 
 const filters: { key: 'all' | Role; label: string }[] = [
   { key: 'all', label: 'Everyone' },
@@ -29,10 +31,79 @@ function lineDetail(line: BreakdownLine) {
   return `${fmtNum(line.raw)} × ${fmtSigned(line.rate ?? 0)}`
 }
 
+// Short synthesized click, created only inside a tap handler so it never
+// autoplays. Opening is a slightly higher blip than closing. Under ~100ms.
+// Guarded throughout: browsers without Web Audio are unaffected and a
+// sound failure must never block expanding or closing a row.
+function playClick(opening: boolean) {
+  try {
+    if (typeof window === 'undefined') return
+    const AudioContextCtor =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioContextCtor) return
+    const ctx = new AudioContextCtor()
+    const resumed = ctx.resume?.()
+    if (resumed && typeof resumed.catch === 'function') resumed.catch(() => {})
+    const oscillator = ctx.createOscillator()
+    const gain = ctx.createGain()
+    const now = ctx.currentTime
+    oscillator.type = 'sine'
+    oscillator.frequency.setValueAtTime(opening ? 720 : 520, now)
+    gain.gain.setValueAtTime(0.08, now)
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07)
+    oscillator.connect(gain)
+    gain.connect(ctx.destination)
+    oscillator.start(now)
+    oscillator.stop(now + 0.08)
+    oscillator.onended = () => {
+      ctx.close().catch(() => {})
+    }
+  } catch {
+    // Sound must never block the expand/close.
+  }
+}
+
+// Haptic feedback, independent of the sound toggle: it still vibrates when
+// sound is off, on devices that support it. Guarded so devices/browsers
+// without vibration support are unaffected and it never throws.
+function vibrate(opening: boolean) {
+  try {
+    if (typeof navigator === 'undefined' || !('vibrate' in navigator)) return
+    navigator.vibrate(opening ? 15 : 8)
+  } catch {
+    // No vibration support; the expand/close still works.
+  }
+}
+
 export function Rankings({ board }: { board: Board }) {
   const [filter, setFilter] = useState<'all' | Role>('all')
   const [openId, setOpenId] = useState<string | null>(null)
+  const [soundOn, setSoundOn] = useState(true)
+  const [soundLoaded, setSoundLoaded] = useState(false)
   const rows = filter === 'all' ? board.rows : rankWithin(board.rows.filter((r) => r.role === filter))
+
+  // Load the persisted sound choice after mount (default ON). Reading
+  // localStorage in an effect avoids a server/client hydration mismatch.
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(SOUND_STORAGE_KEY)
+      if (stored !== null) setSoundOn(stored !== 'false')
+    } catch {
+      // localStorage unavailable; keep the default (sound on).
+    }
+    setSoundLoaded(true)
+  }, [])
+
+  // Persist the sound choice once it has been loaded.
+  useEffect(() => {
+    if (!soundLoaded) return
+    try {
+      window.localStorage.setItem(SOUND_STORAGE_KEY, soundOn ? 'true' : 'false')
+    } catch {
+      // Persisting is best-effort only.
+    }
+  }, [soundOn, soundLoaded])
 
   // Close the expanded breakdown when the period or view changes, so a
   // breakdown from one view is never shown under another view's rows.
@@ -42,27 +113,47 @@ export function Rankings({ board }: { board: Board }) {
     setOpenId(null)
   }, [board.view, board.friday, board.month])
 
+  function handleRowClick(rowId: string, isOpen: boolean) {
+    const opening = !isOpen
+    if (soundOn) playClick(opening)
+    vibrate(opening)
+    setOpenId(opening ? rowId : null)
+  }
+
   return (
     <section aria-labelledby="rankings-title" className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
         <h2 id="rankings-title" className="font-display text-xl font-bold uppercase tracking-wide">
           Rankings
         </h2>
-        <div className="flex gap-1" role="group" aria-label="Filter rankings">
-          {filters.map((f) => (
-            <button
-              key={f.key}
-              type="button"
-              aria-pressed={filter === f.key}
-              onClick={() => setFilter(f.key)}
-              className={cn(
-                'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-                filter === f.key ? 'bg-foreground text-background' : 'bg-secondary text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            aria-pressed={soundOn}
+            aria-label={soundOn ? 'Sound on' : 'Sound off'}
+            title={soundOn ? 'Sound on' : 'Sound off'}
+            onClick={() => setSoundOn((v) => !v)}
+            className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {soundOn ? <Volume2 className="size-3.5" aria-hidden="true" /> : <VolumeX className="size-3.5" aria-hidden="true" />}
+            {soundOn ? 'Sound on' : 'Sound off'}
+          </button>
+          <div className="flex gap-1" role="group" aria-label="Filter rankings">
+            {filters.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                aria-pressed={filter === f.key}
+                onClick={() => setFilter(f.key)}
+                className={cn(
+                  'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                  filter === f.key ? 'bg-foreground text-background' : 'bg-secondary text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       <ol className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card">
@@ -75,7 +166,7 @@ export function Rankings({ board }: { board: Board }) {
                 type="button"
                 aria-expanded={open}
                 aria-controls={`breakdown-${r.id}`}
-                onClick={() => setOpenId(open ? null : r.id)}
+                onClick={() => handleRowClick(r.id, open)}
                 className="flex w-full items-center gap-3 px-4 py-3 text-left"
               >
                 <span

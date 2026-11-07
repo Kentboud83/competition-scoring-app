@@ -14,6 +14,13 @@ export const DEFAULT_RULES: Rules = {
   onQuote: 1,
   lateHour: -0.25,
   safety: -5,
+  bonusTrash: 5,
+  bonusDumpster: 5,
+  bonusShelf: 5,
+  bonusTeamDriving100: 5,
+  bonusVolunteer: 3,
+  bonusTruckInspection: 2,
+  bonusHitTheMark: 2,
 }
 
 export const STAT_FIELDS: { key: StatKey; label: string; short: string; step?: number; allowNegative?: boolean }[] = [
@@ -44,6 +51,16 @@ export const RULE_FIELDS: { key: keyof Rules; label: string; help: (r: Rules) =>
   { key: 'onQuote', label: 'Job finished on quote', step: 0.25, help: () => 'Points for every job completed right at the quoted time.' },
   { key: 'lateHour', label: 'Late (per hour over)', step: 0.25, help: () => 'Points per hour over quote, added up across all late jobs.' },
   { key: 'safety', label: 'Safety incident', step: 0.25, help: () => 'Points for every safety incident. Safety first!' },
+]
+
+export const BONUS_RULE_FIELDS: { key: keyof Rules; label: string; help: (r: Rules) => string; step: number; valueSuffix?: string }[] = [
+  { key: 'bonusTrash', label: 'Emptying trash cans', step: 0.25, help: () => 'Points for emptying trash cans.' },
+  { key: 'bonusDumpster', label: 'Taking boxes to the dumpster', step: 0.25, help: () => 'Points for taking boxes to the dumpster.' },
+  { key: 'bonusShelf', label: 'Organizing the parts shelf', step: 0.25, help: () => 'Points for organizing the parts shelf.' },
+  { key: 'bonusTeamDriving100', label: 'Every technician on the team scores 100 driving', step: 0.25, valueSuffix: ' to the team', help: () => 'Points to the team when every technician on the team scores 100 driving.' },
+  { key: 'bonusVolunteer', label: 'Volunteering for after-hours/weekend work', step: 0.25, help: () => 'Points for volunteering for after-hours/weekend work.' },
+  { key: 'bonusTruckInspection', label: 'Truck inspections', step: 0.25, help: () => 'Points for a truck inspection.' },
+  { key: 'bonusHitTheMark', label: 'Filling out 5 "Hit the Mark" cards', step: 0.25, help: () => 'Points for filling out 5 "Hit the Mark" cards.' },
 ]
 
 export function scoreEntry(entry: Entry | undefined, rules: Rules) {

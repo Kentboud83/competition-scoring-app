@@ -70,9 +70,21 @@ export function LiveBoard() {
   // Count one view per browser session when the Board first mounts.
   // sessionStorage is per tab, so in-app tab switches, Board polls/refreshes
   // and same-session reloads do not add extra counts; a fresh tab counts again.
+  // A session opened with ?nocount=1 (used for the assistant's own checks)
+  // is never counted: the flag is stored in sessionStorage, so navigating
+  // within the app during that session (Board → Leaders → Board) still
+  // doesn't count even once the param is no longer in the URL. The param is
+  // read from window.location.search here instead of useSearchParams: this
+  // page is statically rendered with no Suspense boundary, and
+  // useSearchParams would fail the build without one.
   useEffect(() => {
     try {
       if (sessionStorage.getItem('view-recorded')) return
+      if (sessionStorage.getItem('view-nocount')) return
+      if (new URLSearchParams(window.location.search).get('nocount') === '1') {
+        sessionStorage.setItem('view-nocount', '1')
+        return
+      }
       sessionStorage.setItem('view-recorded', '1')
       recordView().catch(() => {})
     } catch {

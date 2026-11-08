@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils'
 // in its normal Rankings list.
 export function Awards({ board }: { board: Board }) {
   const period = board.view === 'week' ? 'Week' : 'Month'
+  const improved = board.awards.improved
+  const improvedGain = improved?.gain ?? 0
 
   return (
     <section aria-labelledby="awards-title" className="flex flex-col gap-3">
@@ -21,12 +23,23 @@ export function Awards({ board }: { board: Board }) {
         <AwardCard
           icon={TrendingUp}
           label="Most Improved"
-          award={board.awards.improved}
-          detail={board.awards.improved ? `+${formatPts(board.awards.improved.gain ?? 0)} vs last ${period.toLowerCase()}` : undefined}
+          award={improved}
+          subdetail={
+            improved ? `${formatGain(improvedGain)} vs last ${period.toLowerCase()}` : undefined
+          }
+          subdetailClassName={
+            improvedGain > 0 ? 'text-emerald-500' : improvedGain < 0 ? 'text-red-500' : undefined
+          }
         />
       </div>
     </section>
   )
+}
+
+// Gain with its sign: "+6" when positive, "0" when zero, "-2" when negative
+// (a plain `+${gain}` would render "+-2" for a negative gain).
+function formatGain(gain: number): string {
+  return gain > 0 ? `+${formatPts(gain)}` : formatPts(gain)
 }
 
 // Monthly jobs progress. Not an award — it stays on the Board.
@@ -67,11 +80,15 @@ function AwardCard({
   label,
   award,
   detail,
+  subdetail,
+  subdetailClassName,
 }: {
   icon: typeof Crown
   label: string
   award: Board['awards']['tech']
   detail?: string
+  subdetail?: string
+  subdetailClassName?: string
 }) {
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 sm:flex-col sm:items-start">
@@ -90,6 +107,9 @@ function AwardCard({
               {award.name}
             </p>
             <p className="text-xs text-muted-foreground">{detail ?? `${formatPts(award.points)} pts`}</p>
+            {subdetail ? (
+              <p className={cn('text-xs font-medium', subdetailClassName)}>{subdetail}</p>
+            ) : null}
           </>
         ) : (
           <p className="text-sm text-muted-foreground">Waiting on scores</p>

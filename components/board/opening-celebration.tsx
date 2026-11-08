@@ -91,6 +91,12 @@ function burstConfetti(canvas: HTMLCanvasElement) {
 // sessionStorage keeps it from re-firing on in-app tab switches or on
 // reloads within the same session; a fresh session plays it again.
 // Confetti is skipped entirely for users who prefer reduced motion.
+//
+// Sync: browsers block sound until the user has tapped, so the confetti
+// does NOT burst on mount — it waits for the first tap, and the fanfare
+// plays at the same moment. Passive viewers still see the confetti: if
+// nobody taps within ~2s, it bursts silently on its own and the fanfare
+// stays deferred to the first tap after that.
 // The canvas is fixed, pointer-events none and above the app content,
 // so it never blocks taps or scrolling, and it is removed after ~2.6s.
 export function OpeningCelebration() {
@@ -105,17 +111,52 @@ export function OpeningCelebration() {
       // Storage unavailable; still celebrate this mount only.
     }
     try {
-      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        setShowConfetti(true)
-      }
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     } catch {
-      setShowConfetti(true)
+      // If the media query is unavailable, celebrate as normal.
     }
-    // Fanfare plays on the shared AudioContext (lib/sound): it sounds
-    // immediately when autoplay allows, otherwise on the first tap
-    // anywhere in the app. Sound must never break the Board.
+
+    let celebrated = false
+    let fallbackTimer: number | null = null
+
+    const stopListening = () => {
+      window.removeEventListener('pointerdown', onFirstGesture)
+      window.removeEventListener('keydown', onFirstGesture)
+      if (fallbackTimer !== null) {
+        window.clearTimeout(fallbackTimer)
+        fallbackTimer = null
+      }
+    }
+
+    // First tap anywhere in the app: fanfare and confetti together, at
+    // the same moment. playFanfare uses the shared AudioContext
+    // (lib/sound) and awaits resume before scheduling the notes, and
+    // the sound toggle gates it; a sound failure never breaks the Board.
+    const onFirstGesture = () => {
+      if (celebrated) return
+      celebrated = true
+      stopListening()
+      setShowConfetti(true)
+      void playFanfare()
+    }
+    window.addEventListener('pointerdown', onFirstGesture)
+    window.addEventListener('keydown', onFirstGesture)
+
+    // Fallback for passive viewers: after ~2s with no tap, burst the
+    // confetti silently exactly as before. The fanfare stays deferred
+    // to the first tap after that — playFanfare waits for a gesture
+    // internally when autoplay is blocked.
+    fallbackTimer = window.setTimeout(() => {
+      if (celebrated) return
+      celebrated = true
+      stopListening()
+      setShowConfetti(true)
+      void playFanfare()
+    }, 2000)
+
     unlockAudioOnFirstGesture()
-    void playFanfare()
+
+    return stopListening
   }, [])
 
   useEffect(() => {

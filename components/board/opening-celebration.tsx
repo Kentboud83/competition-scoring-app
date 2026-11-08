@@ -3,7 +3,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { playFanfare, unlockAudioOnFirstGesture } from '@/lib/sound'
 
-const SESSION_KEY = 'opening-celebration-played'
+// The last celebration is stamped in sessionStorage so the fanfare does
+// not fire on every in-app tab switch — but only for 30 minutes. A plain
+// once-per-session flag failed on phones: a tab can stay alive for days,
+// so after the very first open the tone never played again. A 30-minute
+// cooldown means a fresh open after a while celebrates again, while
+// flipping between Board and Leaders (seconds apart) stays quiet.
+const SESSION_KEY = 'opening-celebration-at'
+const CELEBRATION_COOLDOWN_MS = 30 * 60 * 1000
 
 // Fanfare: C5 - E5 - G5, a short ascending arpeggio, ~0.9s total.
 // Confetti colours: Team Red / Team Blue (globals.css --team-red /
@@ -87,10 +94,14 @@ function burstConfetti(canvas: HTMLCanvasElement) {
 }
 
 // Opening celebration: a champion fanfare plus a confetti burst, fired
-// once per browser session when the Board (home) page first mounts.
-// sessionStorage keeps it from re-firing on in-app tab switches or on
-// reloads within the same session; a fresh session plays it again.
-// Confetti is skipped entirely for users who prefer reduced motion.
+// when the Board (home) page first mounts and the last celebration was
+// more than 30 minutes ago (see SESSION_KEY above). In-app tab switches
+// or reloads within the cooldown stay quiet; a fresh open after a while
+// celebrates again.
+// Reduced motion skips the CONFETTI only — the fanfare is sound, not
+// motion, so it still plays. (Previously the whole celebration, tone
+// included, was suppressed when reduced motion was on, which silenced
+// the tone for anyone with "remove animations" turned on.)
 //
 // Sync: browsers block sound until the user has tapped, so the confetti
 // does NOT burst on mount — it waits for the first tap, and the fanfare
@@ -105,13 +116,15 @@ export function OpeningCelebration() {
 
   useEffect(() => {
     try {
-      if (window.sessionStorage.getItem(SESSION_KEY)) return
-      window.sessionStorage.setItem(SESSION_KEY, 'true')
+      const last = Number(window.sessionStorage.getItem(SESSION_KEY) || 0)
+      if (last && Date.now() - last < CELEBRATION_COOLDOWN_MS) return
+      window.sessionStorage.setItem(SESSION_KEY, String(Date.now()))
     } catch {
       // Storage unavailable; still celebrate this mount only.
     }
+    let reducedMotion = false
     try {
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+      reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     } catch {
       // If the media query is unavailable, celebrate as normal.
     }
@@ -129,14 +142,15 @@ export function OpeningCelebration() {
     }
 
     // First tap anywhere in the app: fanfare and confetti together, at
-    // the same moment. playFanfare uses the shared AudioContext
+    // the same moment (confetti skipped when reduced motion is on, the
+    // fanfare still plays). playFanfare uses the shared AudioContext
     // (lib/sound) and awaits resume before scheduling the notes, and
     // the sound toggle gates it; a sound failure never breaks the Board.
     const onFirstGesture = () => {
       if (celebrated) return
       celebrated = true
       stopListening()
-      setShowConfetti(true)
+      if (!reducedMotion) setShowConfetti(true)
       void playFanfare()
     }
     window.addEventListener('pointerdown', onFirstGesture)
@@ -150,7 +164,7 @@ export function OpeningCelebration() {
       if (celebrated) return
       celebrated = true
       stopListening()
-      setShowConfetti(true)
+      if (!reducedMotion) setShowConfetti(true)
       void playFanfare()
     }, 2000)
 

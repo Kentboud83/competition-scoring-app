@@ -67,11 +67,18 @@ let queue: Promise<unknown> = Promise.resolve()
 
 export function mutateStore(
   fn: (store: Store) => void | Promise<void>,
+  opts?: { preserveUpdatedAt?: boolean },
 ): Promise<Store> {
   const task = queue.then(async () => {
     const store = await readStore()
     await fn(store)
-    store.updatedAt = new Date().toISOString()
+    // Normally a write stamps the Board's "updated" time. A caller that
+    // only records a view can opt out: merely opening the app must not
+    // move the "Live · updated" time, which should reflect the last
+    // score or settings change.
+    if (!opts?.preserveUpdatedAt) {
+      store.updatedAt = new Date().toISOString()
+    }
     if (useKv) {
       const { kv } = await import('@vercel/kv')
       await kv.set(KV_KEY, store)
@@ -86,8 +93,13 @@ export function mutateStore(
 }
 
 export async function incrementViews(): Promise<number> {
-  const store = await mutateStore((s) => {
-    s.views = (typeof s.views === 'number' ? s.views : 0) + 1
-  })
+  const store = await mutateStore(
+    (s) => {
+      s.views = (typeof s.views === 'number' ? s.views : 0) + 1
+    },
+    // A view is not a score change: count it without moving the Board's
+    // "updated" time (see mutateStore).
+    { preserveUpdatedAt: true },
+  )
   return store.views
 }

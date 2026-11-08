@@ -7,6 +7,7 @@ import {
   SESSION_COOKIE,
   hashPasscode,
   hashToken,
+  isManager,
   newSessionToken,
   requireManager,
   setSessionCookie,
@@ -217,12 +218,15 @@ export async function getStoreSnapshotForManager() {
 
 /**
  * Count one app view (a Board open). Called once per browser session from
- * the Board; any visitor counts, signed in or not. Fire-and-forget: a
- * failure here must never break the Board load, and it does not revalidate
- * any page.
+ * the Board; any visitor counts, signed in or not — except the manager.
+ * Kent's own opens are not counted: when the caller holds a valid manager
+ * session (the showdown_manager cookie), the increment is skipped, so the
+ * total reflects everyone else. Fire-and-forget: a failure here must never
+ * break the Board load, and it does not revalidate any page.
  */
 export async function recordView(): Promise<void> {
   try {
+    if (await isManager()) return
     await incrementViews()
   } catch {
     // A failed count must never break the Board load.

@@ -29,12 +29,34 @@ function vibrate(opening: boolean) {
   }
 }
 
+// First name for alphabetical sorting: the first word of the full name.
+function firstName(name: string) {
+  return name.split(' ')[0] ?? name
+}
+
+// Group rows by team — Team Red first, then Team Blue — with each group
+// sorted alphabetically by first name (full name breaks ties). A group
+// left empty by the role filter is omitted entirely.
+function groupByTeam(rows: Board['rows']) {
+  const byTeam = (team: 'red' | 'blue') =>
+    rows
+      .filter((r) => r.team === team)
+      .sort(
+        (a, b) =>
+          firstName(a.name).localeCompare(firstName(b.name)) || a.name.localeCompare(b.name),
+      )
+  return (['red', 'blue'] as const)
+    .map((key) => ({ key, rows: byTeam(key) }))
+    .filter((g) => g.rows.length > 0)
+}
+
 export function Rankings({ board }: { board: Board }) {
   const [filter, setFilter] = useState<'all' | Role>('all')
   const [openId, setOpenId] = useState<string | null>(null)
   const [soundOn, setSoundOn] = useState(true)
   const [soundLoaded, setSoundLoaded] = useState(false)
-  const rows = filter === 'all' ? board.rows : rankWithin(board.rows.filter((r) => r.role === filter))
+  const filtered = filter === 'all' ? board.rows : board.rows.filter((r) => r.role === filter)
+  const groups = groupByTeam(filtered)
 
   // Load the persisted sound choice after mount (default ON). Reading
   // localStorage in an effect avoids a server/client hydration mismatch.
@@ -113,60 +135,50 @@ export function Rankings({ board }: { board: Board }) {
           </div>
         </div>
       </div>
-      <ol className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card">
-        {rows.map((r) => {
-          const open = openId === r.id
-          const breakdown = r.breakdown ?? []
-          return (
-            <li key={r.id} className="border-b border-border last:border-b-0">
-              <button
-                type="button"
-                aria-expanded={open}
-                aria-controls={`breakdown-${r.id}`}
-                onClick={() => handleRowClick(r.id, open)}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left"
-              >
-                <span
-                  className={cn(
-                    'flex size-8 shrink-0 items-center justify-center rounded-full font-display text-lg font-bold tabular-nums',
-                    r.rank === 1 && r.entered ? 'bg-primary text-primary-foreground' : r.rank <= 3 && r.entered ? 'bg-secondary text-foreground' : 'text-muted-foreground',
-                  )}
-                >
-                  <span className="sr-only">Rank</span>
-                  {r.rank}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{r.name}</p>
-                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <span className={cn('size-2 rounded-full', r.team === 'red' ? 'bg-team-red' : 'bg-team-blue')} aria-hidden="true" />
-                    {board.teams.find((t) => t.key === r.team)?.name} · {r.role === 'tech' ? 'Tech' : 'Asst'}
-                    {r.behind > 0 && r.entered && <span>· {formatPts(r.behind)} back</span>}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className={cn('font-display text-2xl font-bold tabular-nums leading-none', !r.entered && 'text-muted-foreground')}>
-                    {r.entered ? formatPts(r.points) : '—'}
-                  </p>
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">pts</p>
-                </div>
-                <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} aria-hidden="true" />
-              </button>
-              {open && <Breakdown id={`breakdown-${r.id}`} breakdown={breakdown} points={r.points} />}
-            </li>
-          )
-        })}
-      </ol>
+      {groups.map((g) => {
+        const team = board.teams.find((t) => t.key === g.key)
+        return (
+          <div key={g.key} className="flex flex-col gap-2">
+            <h3 className="flex items-center gap-2 px-1 font-display text-base font-bold uppercase tracking-wide">
+              <span className={cn('size-2.5 rounded-full', g.key === 'red' ? 'bg-team-red' : 'bg-team-blue')} aria-hidden="true" />
+              {team?.name ?? (g.key === 'red' ? 'Team Red' : 'Team Blue')}
+            </h3>
+            <ol className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card">
+              {g.rows.map((r) => {
+                const open = openId === r.id
+                const breakdown = r.breakdown ?? []
+                return (
+                  <li key={r.id} className="border-b border-border last:border-b-0">
+                    <button
+                      type="button"
+                      aria-expanded={open}
+                      aria-controls={`breakdown-${r.id}`}
+                      onClick={() => handleRowClick(r.id, open)}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium">{r.name}</p>
+                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <span className={cn('size-2 rounded-full', r.team === 'red' ? 'bg-team-red' : 'bg-team-blue')} aria-hidden="true" />
+                          {team?.name} · {r.role === 'tech' ? 'Tech' : 'Asst'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className={cn('font-display text-2xl font-bold tabular-nums leading-none', !r.entered && 'text-muted-foreground')}>
+                          {r.entered ? formatPts(r.points) : '—'}
+                        </p>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">pts</p>
+                      </div>
+                      <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} aria-hidden="true" />
+                    </button>
+                    {open && <Breakdown id={`breakdown-${r.id}`} breakdown={breakdown} points={r.points} />}
+                  </li>
+                )
+              })}
+            </ol>
+          </div>
+        )
+      })}
     </section>
   )
-}
-
-function rankWithin(rows: Board['rows']) {
-  const top = rows[0]?.points ?? 0
-  let last = Number.NaN
-  let rank = 0
-  return rows.map((r, i) => {
-    if (r.points !== last) rank = i + 1
-    last = r.points
-    return { ...r, rank, behind: top - r.points }
-  })
 }

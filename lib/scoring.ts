@@ -62,7 +62,7 @@ export const BONUS_RULE_FIELDS: { key: keyof Rules; label: string; help: (r: Rul
   { key: 'bonusTeamDriving100', label: 'Every technician on the team scores 100 driving', step: 0.25, valueSuffix: ' to the team', help: () => 'Points to the team when every technician on the team scores 100 driving.' },
   { key: 'bonusVolunteer', label: 'Volunteering for after-hours/weekend work', step: 0.25, help: () => 'Points for volunteering for after-hours/weekend work.' },
   { key: 'bonusTruckInspection', label: 'Truck inspections', step: 0.25, help: () => 'Points for a truck inspection.' },
-  { key: 'bonusHitTheMark', label: 'Filling out 5 "Hit the Mark" cards', step: 0.25, help: () => 'Points for filling out 5 "Hit the Mark" cards.' },
+  { key: 'bonusHitTheMark', label: 'Each "Hit the Mark" card filled out', step: 0.25, help: () => 'Points for each "Hit the Mark" card filled out.' },
 ]
 
 export function scoreEntry(entry: Entry | undefined, rules: Rules) {

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { BONUS_RULE_FIELDS, RULE_FIELDS, formatPts } from '@/lib/scoring'
+import { requireAnySession } from '@/lib/auth'
 import { readStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 
@@ -9,6 +10,7 @@ export const metadata: Metadata = { title: 'How Points Work · The Weekly Showdo
 const NOT_POINTS = new Set(['drivingCutoff', 'gpTarget'])
 
 export default async function RulesPage() {
+  await requireAnySession()
   const { rules, settings } = await readStore()
   return (
     <div className="flex flex-col gap-5">

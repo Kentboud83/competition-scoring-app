@@ -1,12 +1,11 @@
 import { Lock, User } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { getCompetitor, isManager } from '@/lib/auth'
+import { getSessionState } from '@/lib/auth'
 import { InstallButton } from './install-button'
 
 export async function AppHeader() {
-  const me = await getCompetitor()
-  const manager = await isManager()
+  const { competitor: me, isManager: manager } = await getSessionState()
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur">
       <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">

@@ -1,6 +1,7 @@
 'use client'
 
 import { KeyRound, LogOut, User } from 'lucide-react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import { changeCompetitorPasscode, competitorSignIn, competitorSignOut } from '@/app/actions'
@@ -44,7 +45,7 @@ export function CompetitorSignIn({
       try {
         const res = await competitorSignIn(selected.id, code)
         if (res.ok) {
-          router.push('/comments')
+          router.push('/')
           router.refresh()
         } else {
           setError(res.error)
@@ -196,6 +197,12 @@ export function CompetitorSignIn({
       <Button type="submit" size="lg" disabled={pending || !selected}>
         {pending ? 'Checking…' : firstTime ? 'Set password & sign in' : 'Sign in'}
       </Button>
+      <p className="text-center text-sm text-muted-foreground">
+        Manager?{' '}
+        <Link href="/manage" className="font-semibold text-foreground underline underline-offset-2">
+          Sign in with the manager passcode
+        </Link>
+      </p>
     </form>
   )
 }

@@ -28,20 +28,26 @@ export async function signIn(passcode: string): Promise<Result> {
   const code = String(passcode ?? '').trim()
   if (code.length < 4 || code.length > 64) return { ok: false, error: 'Passcode must be at least 4 characters.' }
 
+  // Verify BEFORE mutating. mutateStore returns the store, not the
+  // callback's return value, so checking the passcode inside the callback
+  // could never surface "That passcode is not correct." — a wrong passcode
+  // used to return ok:true without recording a session, and the sign-in
+  // form just looped back to "Sign in" with no message at all.
+  const current = await readStore()
+  if (current.auth.hash && current.auth.salt && !verifyPasscode(code, current.auth.salt, current.auth.hash)) {
+    return { ok: false, error: 'That passcode is not correct.' }
+  }
+
   const token = newSessionToken()
-  const result = await mutateStore((store) => {
+  await mutateStore((store) => {
     if (!store.auth.hash || !store.auth.salt) {
       const salt = randomBytes(16).toString('hex')
       store.auth.salt = salt
       store.auth.hash = hashPasscode(code, salt)
-    } else if (!verifyPasscode(code, store.auth.salt, store.auth.hash)) {
-      return false
     }
     store.auth.sessions = [...store.auth.sessions.slice(-19), hashToken(token)]
-    return true
   })
 
-  if (!result) return { ok: false, error: 'That passcode is not correct.' }
   await setSessionCookie(token)
   refreshAll()
   return { ok: true }

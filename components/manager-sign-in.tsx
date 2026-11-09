@@ -16,9 +16,15 @@ export function ManagerSignIn({ firstRun }: { firstRun: boolean }) {
     e.preventDefault()
     setError('')
     start(async () => {
-      const res = await signIn(code)
-      if (res.ok) router.refresh()
-      else setError(res.error)
+      // A server failure used to reject here with nothing caught, so the
+      // button just fell back to "Sign in" with no message. Show it.
+      try {
+        const res = await signIn(code)
+        if (res.ok) router.refresh()
+        else setError(res.error)
+      } catch {
+        setError('Something went wrong signing in. Check your connection and try again.')
+      }
     })
   }
 

@@ -236,7 +236,7 @@ export function TeamBattle({ board }: { board: Board }) {
           ? 'No scores yet — the battle is about to begin.'
           : displayLeader === 'tie'
             ? 'Dead even! Every point counts.'
-            : `${leaderName} leads by ${formatPts(displayMargin)} pts`}
+            : `${leaderName} leads by ${formatPts(displayMargin)} pt${displayMargin === 1 ? '' : 's'}`}
       </p>
     </section>
   )

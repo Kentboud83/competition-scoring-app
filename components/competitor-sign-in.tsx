@@ -199,8 +199,8 @@ export function CompetitorSignIn({
       </Button>
       <p className="text-center text-sm text-muted-foreground">
         Manager?{' '}
-        <Link href="/manage" className="font-semibold text-foreground underline underline-offset-2">
-          Sign in with the manager passcode
+        <Link href="/manager-login" className="font-semibold text-foreground underline underline-offset-2">
+          Sign in with your manager account
         </Link>
       </p>
     </form>

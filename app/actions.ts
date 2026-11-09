@@ -7,6 +7,7 @@ import {
   COMPETITOR_COOKIE,
   SESSION_COOKIE,
   getCompetitor,
+  getSessionState,
   hashPasscode,
   hashToken,
   isManager,
@@ -17,6 +18,7 @@ import {
   setSessionCookie,
   verifyPasscode,
 } from '@/lib/auth'
+import { MANAGERS } from '@/lib/managers'
 import { fridayOf, isISODate } from '@/lib/dates'
 import { DEFAULT_RULES } from '@/lib/scoring'
 import { incrementViews, mutateStore, readStore } from '@/lib/store'
@@ -28,59 +30,106 @@ const refreshAll = () => {
   revalidatePath('/', 'layout')
 }
 
-export async function signIn(passcode: string): Promise<Result> {
-  const code = String(passcode ?? '').trim()
-  if (code.length < 4 || code.length > 64) return { ok: false, error: 'Passcode must be at least 4 characters.' }
+// --- Manager sign-in -----------------------------------------------------
+// Each manager signs in under their own name with a password they set
+// themselves the first time — just like the competitors. There is no
+// shared manager passcode anymore: the old one stops working, and every
+// manager signs in once as themselves to set a password.
 
-  // Verify BEFORE mutating. mutateStore returns the store, not the
-  // callback's return value, so checking the passcode inside the callback
-  // could never surface "That passcode is not correct." — a wrong passcode
-  // used to return ok:true without recording a session, and the sign-in
-  // form just looped back to "Sign in" with no message at all.
+export async function managerSignIn(managerId: string, passcode: string): Promise<Result> {
+  const code = String(passcode ?? '').trim()
+  if (code.length < 4 || code.length > 64) return { ok: false, error: 'Password must be at least 4 characters.' }
+  const entry = MANAGERS.find((m) => m.id === managerId)
+  if (!entry) return { ok: false, error: 'Pick your name from the list.' }
+
+  // Verify BEFORE mutating, same as the competitor sign-in: mutateStore
+  // returns the store, not the callback's value, so a wrong password
+  // checked inside the callback could never surface its error.
   const current = await readStore()
-  if (current.auth.hash && current.auth.salt && !verifyPasscode(code, current.auth.salt, current.auth.hash)) {
-    return { ok: false, error: 'That passcode is not correct.' }
+  const creds = current.auth.managers?.[entry.id]
+  if (creds && !verifyPasscode(code, creds.salt, creds.hash)) {
+    return { ok: false, error: 'That password is not correct.' }
   }
 
   const token = newSessionToken()
-  await mutateStore((store) => {
-    if (!store.auth.hash || !store.auth.salt) {
-      const salt = randomBytes(16).toString('hex')
-      store.auth.salt = salt
-      store.auth.hash = hashPasscode(code, salt)
-    }
-    store.auth.sessions = [...store.auth.sessions.slice(-19), hashToken(token)]
-  })
+  await mutateStore(
+    (store) => {
+      if (!store.auth.managers) store.auth.managers = {}
+      if (!store.auth.managerSessions) store.auth.managerSessions = {}
+      if (!store.auth.managers[entry.id]) {
+        const salt = randomBytes(16).toString('hex')
+        store.auth.managers[entry.id] = { salt, hash: hashPasscode(code, salt) }
+      }
+      store.auth.managerSessions[hashToken(token)] = entry.id
+    },
+    { preserveUpdatedAt: true },
+  )
 
   await setSessionCookie(token)
   refreshAll()
   return { ok: true }
 }
 
-export async function signOut(): Promise<Result> {
+export async function managerSignOut(): Promise<Result> {
   const jar = await cookies()
   const token = jar.get(SESSION_COOKIE)?.value
   if (token) {
     const hashed = hashToken(token)
-    await mutateStore((store) => {
-      store.auth.sessions = store.auth.sessions.filter((s) => s !== hashed)
-    })
+    await mutateStore(
+      (store) => {
+        if (store.auth.managerSessions) delete store.auth.managerSessions[hashed]
+      },
+      { preserveUpdatedAt: true },
+    )
   }
   jar.delete(SESSION_COOKIE)
   refreshAll()
   return { ok: true }
 }
 
-export async function changePasscode(next: string): Promise<Result> {
-  await requireManager()
+export async function changeManagerPasscode(next: string): Promise<Result> {
+  const { manager } = await getSessionState()
+  if (!manager) throw new Error('Manager sign-in required')
   const code = String(next ?? '').trim()
-  if (code.length < 4 || code.length > 64) return { ok: false, error: 'Passcode must be at least 4 characters.' }
+  if (code.length < 4 || code.length > 64) return { ok: false, error: 'Password must be at least 4 characters.' }
   const jar = await cookies()
   const current = hashToken(jar.get(SESSION_COOKIE)?.value ?? '')
-  await mutateStore((store) => {
-    const salt = randomBytes(16).toString('hex')
-    store.auth = { salt, hash: hashPasscode(code, salt), sessions: [current] }
-  })
+  await mutateStore(
+    (store) => {
+      const salt = randomBytes(16).toString('hex')
+      if (!store.auth.managers) store.auth.managers = {}
+      store.auth.managers[manager.id] = { salt, hash: hashPasscode(code, salt) }
+      // Keep only this device signed in after a password change.
+      if (store.auth.managerSessions) {
+        for (const [t, mid] of Object.entries(store.auth.managerSessions)) {
+          if (mid === manager.id && t !== current) delete store.auth.managerSessions[t]
+        }
+      }
+    },
+    { preserveUpdatedAt: true },
+  )
+  return { ok: true }
+}
+
+// A manager's recovery path for a forgotten manager password: any signed-in
+// manager can reset another manager's password; they set a new one the
+// next time they sign in.
+export async function resetManagerPasscode(managerId: string): Promise<Result> {
+  await requireManager()
+  const entry = MANAGERS.find((m) => m.id === managerId)
+  if (!entry) return { ok: false, error: 'Pick a manager from the list.' }
+  await mutateStore(
+    (store) => {
+      if (store.auth.managers) delete store.auth.managers[entry.id]
+      if (store.auth.managerSessions) {
+        for (const [t, mid] of Object.entries(store.auth.managerSessions)) {
+          if (mid === entry.id) delete store.auth.managerSessions[t]
+        }
+      }
+    },
+    { preserveUpdatedAt: true },
+  )
+  refreshAll()
   return { ok: true }
 }
 

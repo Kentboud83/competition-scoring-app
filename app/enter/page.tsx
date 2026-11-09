@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { ManagerSignIn } from '@/components/manager-sign-in'
 import { ScoreEntry } from '@/components/enter/score-entry'
 import { isManager } from '@/lib/auth'
+import { MANAGERS } from '@/lib/managers'
 import { fridayOf, isISODate, todayISO } from '@/lib/dates'
 import { readStore } from '@/lib/store'
 import { teamsForMonth } from '@/lib/teams'
@@ -11,7 +12,11 @@ export const metadata: Metadata = { title: 'Enter Scores · The Weekly Showdown'
 
 export default async function EnterPage({ searchParams }: { searchParams: Promise<{ week?: string }> }) {
   const store = await readStore()
-  if (!(await isManager())) return <ManagerSignIn firstRun={!store.auth.hash} />
+  if (!(await isManager())) {
+    const hasPassword: Record<string, boolean> = {}
+    for (const m of MANAGERS) hasPassword[m.id] = Boolean(store.auth.managers?.[m.id])
+    return <ManagerSignIn hasPassword={hasPassword} signedInAs={null} />
+  }
 
   const { week } = await searchParams
   let friday = fridayOf(isISODate(week) ? week : todayISO())

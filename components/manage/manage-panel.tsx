@@ -3,8 +3,9 @@
 import { LogOut, Plus, Shuffle, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
-import { addPerson, changePasscode, redrawTeams, removePerson, resetCompetitorPasscode, saveRules, saveSettings, setTeam, setTruck, signOut } from '@/app/actions'
+import { addPerson, managerSignOut, redrawTeams, removePerson, resetCompetitorPasscode, resetManagerPasscode, saveRules, saveSettings, setTeam, setTruck } from '@/app/actions'
 import { Button } from '@/components/ui/button'
+import { MANAGERS } from '@/lib/managers'
 import { BONUS_RULE_FIELDS, RULE_FIELDS } from '@/lib/scoring'
 import type { Person, Role, Rules, TeamKey } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -34,6 +35,7 @@ export function ManagePanel({
   jobsCompleted,
   views = 0,
   logins = {},
+  managerLogins = {},
 }: {
   month: string
   monthName: string
@@ -45,6 +47,8 @@ export function ManagePanel({
   views?: number
   /** Whether each person has set a competitor password yet. */
   logins?: Record<string, boolean>
+  /** Whether each manager has set their own password yet. */
+  managerLogins?: Record<string, boolean>
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
@@ -65,7 +69,6 @@ export function ManagePanel({
   const [team2, setTeam2] = useState(settings.team2)
     const [jobsDone, setJobsDone] = useState(jobsCompleted !== undefined ? String(jobsCompleted) : '')
   const [proj, setProj] = useState(projection !== undefined ? String(projection) : '')
-  const [passcode, setPasscode] = useState('')
 
   const count = (team: TeamKey, role: Role) => people.filter((p) => p.team === team && p.role === role).length
 
@@ -73,7 +76,7 @@ export function ManagePanel({
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
         <h1 className="font-display text-3xl font-bold uppercase tracking-wide">Manage</h1>
-        <Button variant="ghost" size="sm" onClick={() => run(signOut, 'Signed out')} className="gap-1.5">
+        <Button variant="ghost" size="sm" onClick={() => run(managerSignOut, 'Signed out')} className="gap-1.5">
           <LogOut className="size-4" aria-hidden="true" />Sign out
         </Button>
       </div>
@@ -272,33 +275,35 @@ export function ManagePanel({
         </Button>
       </Section>
 
-      <Section title="Manager passcode" description="Changing it signs out every other device.">
-        <form
-          className="flex flex-col gap-2 sm:flex-row"
-          onSubmit={(e) => {
-            e.preventDefault()
-            run(() => changePasscode(passcode), 'Passcode updated')
-            setPasscode('')
-          }}
-        >
-          <label className="sr-only" htmlFor="new-passcode">
-            New passcode
-          </label>
-          <input
-            id="new-passcode"
-            type="password"
-            autoComplete="new-password"
-            minLength={4}
-            required
-            className={inputCls}
-            placeholder="New passcode"
-            value={passcode}
-            onChange={(e) => setPasscode(e.target.value)}
-          />
-          <Button type="submit" size="lg" variant="secondary" disabled={pending}>
-            Update
-          </Button>
-        </form>
+      <Section
+        title="Manager logins"
+        description="Each manager signs in under their own name with a password they set themselves the first time. If someone forgets theirs, reset it here — they set a new one the next time they sign in."
+      >
+        <ul className="flex flex-col gap-1.5">
+          {MANAGERS.map((m) => (
+            <li key={m.id} className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-sm">
+                {m.name} <span className="text-muted-foreground">· {m.title}</span>
+              </span>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {managerLogins[m.id] ? 'Password set' : 'Not signed in yet'}
+              </span>
+              {managerLogins[m.id] && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={pending}
+                  onClick={() =>
+                    confirm(`Reset ${m.name}'s password? They'll set a new one next time they sign in.`) &&
+                    run(() => resetManagerPasscode(m.id), `${m.name}'s password reset`)
+                  }
+                >
+                  Reset password
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
       </Section>
     </div>
   )

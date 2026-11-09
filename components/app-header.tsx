@@ -5,7 +5,9 @@ import { getSessionState } from '@/lib/auth'
 import { InstallButton } from './install-button'
 
 export async function AppHeader() {
-  const { competitor: me, isManager: manager } = await getSessionState()
+  const { competitor: me, manager: mgr, isManager: manager } = await getSessionState()
+  const signedInName = mgr?.name ?? me?.name
+  const signedInHref = mgr ? '/manager-login' : '/login'
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur">
       <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
@@ -18,15 +20,15 @@ export async function AppHeader() {
         </Link>
         <div className="flex shrink-0 items-center gap-2">
           <Link
-            href="/login"
+            href={signedInHref}
             className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
           >
             <User className="size-3.5" aria-hidden="true" />
-            {me ? me.name.split(' ')[0] : 'Sign in'}
+            {signedInName ? signedInName.split(' ')[0] : 'Sign in'}
           </Link>
           {!manager && (
             <Link
-              href="/manage"
+              href="/manager-login"
               aria-label="Manager sign-in"
               title="Manager sign-in"
               className="flex size-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:text-foreground"

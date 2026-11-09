@@ -2,10 +2,13 @@ import 'server-only'
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { MANAGERS, type ManagerId } from './managers'
 import { readStore } from './store'
 
 export const SESSION_COOKIE = 'showdown_manager'
 export const COMPETITOR_COOKIE = 'showdown_competitor'
+
+export type ManagerSession = { id: ManagerId; name: string; title: string } | null
 
 export const hashPasscode = (passcode: string, salt: string) => scryptSync(passcode, salt, 32).toString('hex')
 
@@ -54,9 +57,13 @@ export async function requireManager() {
 export type CompetitorSession = { id: string; name: string } | null
 
 // One store read for both sessions: who is signed in as a competitor, and
-// whether the manager is signed in. Every session check in the app goes
-// through this, so a page never has to read the store twice to decide.
-export async function getSessionState(): Promise<{ competitor: CompetitorSession; isManager: boolean }> {
+// which manager is signed in. Every session check in the app goes through
+// this, so a page never has to read the store twice to decide.
+export async function getSessionState(): Promise<{
+  competitor: CompetitorSession
+  manager: ManagerSession
+  isManager: boolean
+}> {
   const jar = await cookies()
   const store = await readStore()
   let competitor: CompetitorSession = null
@@ -66,9 +73,14 @@ export async function getSessionState(): Promise<{ competitor: CompetitorSession
     const person = pid ? store.people.find((p) => p.id === pid && p.active !== false) : undefined
     if (person) competitor = { id: person.id, name: person.name }
   }
+  let manager: ManagerSession = null
   const mgr = jar.get(SESSION_COOKIE)?.value
-  const manager = Boolean(mgr && store.auth.sessions.includes(hashToken(mgr)))
-  return { competitor, isManager: manager }
+  if (mgr) {
+    const mid = store.auth.managerSessions?.[hashToken(mgr)]
+    const entry = mid ? MANAGERS.find((m) => m.id === mid) : undefined
+    if (entry) manager = { id: entry.id, name: entry.name, title: entry.title }
+  }
+  return { competitor, manager, isManager: manager !== null }
 }
 
 // Who is signed in as a competitor, if anyone. The cookie holds a random

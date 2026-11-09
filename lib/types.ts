@@ -77,6 +77,10 @@ export type Store = {
     competitors?: Record<string, { salt: string; hash: string }>
     /** Competitor sessions: hashed token -> person id. */
     competitorSessions?: Record<string, string>
+    /** Per-manager passcodes, keyed by manager id. A manager sets their own the first time they sign in. */
+    managers?: Record<string, { salt: string; hash: string }>
+    /** Manager sessions: hashed token -> manager id. */
+    managerSessions?: Record<string, string>
   }
   updatedAt: string
 }

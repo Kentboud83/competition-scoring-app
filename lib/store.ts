@@ -28,7 +28,7 @@ function initialStore(): Store {
     views: 0,
     comments: [],
     announcements: [],
-    auth: { sessions: [], competitors: {}, competitorSessions: {} },
+    auth: { sessions: [], competitors: {}, competitorSessions: {}, managers: {}, managerSessions: {} },
     updatedAt: new Date().toISOString(),
   }
 }
@@ -52,6 +52,8 @@ function normalizeStore(stored: Store): Store {
       sessions: Array.isArray(stored.auth?.sessions) ? stored.auth.sessions : [],
       competitors: stored.auth?.competitors ?? {},
       competitorSessions: stored.auth?.competitorSessions ?? {},
+      managers: stored.auth?.managers ?? {},
+      managerSessions: stored.auth?.managerSessions ?? {},
     },
   }
 }

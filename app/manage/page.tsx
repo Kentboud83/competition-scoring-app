@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { ManagePanel } from '@/components/manage/manage-panel'
 import { ManagerSignIn } from '@/components/manager-sign-in'
 import { isManager } from '@/lib/auth'
+import { MANAGERS } from '@/lib/managers'
 import { fridayOf, monthLabel, todayISO } from '@/lib/dates'
 import { readStore } from '@/lib/store'
 import { teamsForMonth } from '@/lib/teams'
@@ -11,7 +12,11 @@ export const metadata: Metadata = { title: 'Manage · The Weekly Showdown' }
 
 export default async function ManagePage() {
   const store = await readStore()
-  if (!(await isManager())) return <ManagerSignIn firstRun={!store.auth.hash} />
+  if (!(await isManager())) {
+    const hasPassword: Record<string, boolean> = {}
+    for (const m of MANAGERS) hasPassword[m.id] = Boolean(store.auth.managers?.[m.id])
+    return <ManagerSignIn hasPassword={hasPassword} signedInAs={null} />
+  }
   let today = todayISO()
   if (today < store.settings.startDate) today = store.settings.startDate
   const month = fridayOf(today).slice(0, 7)
@@ -31,6 +36,7 @@ export default async function ManagePage() {
       jobsCompleted={store.jobsCompleted?.[month]}
       views={typeof store.views === 'number' ? store.views : 0}
       logins={Object.fromEntries(store.people.map((p) => [p.id, Boolean(store.auth.competitors?.[p.id])]))}
+      managerLogins={Object.fromEntries(MANAGERS.map((m) => [m.id, Boolean(store.auth.managers?.[m.id])]))}
     />
   )
 }

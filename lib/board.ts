@@ -70,12 +70,13 @@ function weeksInMonth(store: Store, month: string) {
 function pointsFor(store: Store, person: Person, fridays: string[]) {
   let total = 0
   let entered = false
-  // Driving only counts for truck drivers (see lib/scoring.ts).
-  const countsDriving = !!person.truck
+  // Driving counts for truck drivers, reports for everyone else
+  // (see lib/scoring.ts).
+  const isDriver = !!person.truck
   for (const f of fridays) {
     const e = store.scores[f]?.[person.id]
     if (hasEntry(e)) entered = true
-    total += scoreEntry(e, store.rules, countsDriving)
+    total += scoreEntry(e, store.rules, isDriver)
   }
   return { total, entered }
 }
@@ -93,8 +94,9 @@ const clean = (n: number) => {
 // safe (at/above the cutoff, below 100) vs unsafe at the driving cutoff,
 // instead of summing the raw driving scores.
 // Bonus is 1:1 in scoreEntry (there is no bonus rule value), so its rate is 1.
-export function computeBreakdown(entries: Entry[], rules: Rules, countsDriving = true): BreakdownLine[] {
+export function computeBreakdown(entries: Entry[], rules: Rules, isDriver = true): BreakdownLine[] {
   const rates: Record<string, number> = {
+    reports: rules.report,
     jobs: rules.job,
     fwa: rules.fwa,
     callbacks: rules.callback,
@@ -111,7 +113,7 @@ export function computeBreakdown(entries: Entry[], rules: Rules, countsDriving =
     if (field.key === 'driving') {
       // No driving line for people without a truck: their driving score
       // earns no points, so there is nothing to break down.
-      if (!countsDriving) continue
+      if (!isDriver) continue
       let safeWeeks = 0
       let unsafeWeeks = 0
       let perfectWeeks = 0
@@ -142,6 +144,9 @@ export function computeBreakdown(entries: Entry[], rules: Rules, countsDriving =
       }
       continue
     }
+    // No reports line for truck drivers: reports are the assistants'
+    // replacement for driving, so drivers earn nothing from them.
+    if (field.key === 'reports' && isDriver) continue
     const raw = entries.reduce((s, e) => s + (e[field.key] ?? 0), 0)
     const points = clean(entries.reduce((s, e) => s + (e[field.key] ?? 0) * rates[field.key], 0))
     if (raw === 0 && points === 0) continue

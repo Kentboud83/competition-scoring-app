@@ -69,9 +69,11 @@ export function ScoreEntry({
       const payload = Object.fromEntries(
         people.map((p) => {
           const e = toEntry(draft[p.id])
-          // Driving scores are gone for anyone without a truck: leaving
-          // the value out here removes it from the stored week entry.
-          if (!p.truck) delete e.driving
+          // Driving scores belong to truck drivers, reports to everyone
+          // else: leaving the other group's value out here removes it
+          // from the stored week entry.
+          if (p.truck) delete e.reports
+          else delete e.driving
           return [p.id, e]
         }),
       )
@@ -136,7 +138,9 @@ export function ScoreEntry({
               </button>
               {isOpen && (
                 <div id={`entry-${p.id}`} className="grid grid-cols-2 gap-3 border-t border-border p-4 sm:grid-cols-3">
-                  {STAT_FIELDS.filter((f) => f.key !== 'driving' || p.truck).map((f) => (
+                  {STAT_FIELDS.filter(
+                    (f) => (f.key !== 'driving' || p.truck) && (f.key !== 'reports' || !p.truck),
+                  ).map((f) => (
                     <label key={f.key} className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
                       {f.label}
                       <input

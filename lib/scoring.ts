@@ -5,6 +5,7 @@ export const DEFAULT_RULES: Rules = {
   drivingSafe: 1,
   drivingUnsafe: -2,
   drivingPerfect: 2,
+  report: 1,
   job: 1,
   fwa: 1,
   callback: -2,
@@ -26,6 +27,7 @@ export const DEFAULT_RULES: Rules = {
 
 export const STAT_FIELDS: { key: StatKey; label: string; short: string; step?: number; allowNegative?: boolean }[] = [
   { key: 'driving', label: 'Driving Score', short: 'Driving' },
+  { key: 'reports', label: 'Reports Turned In', short: 'Reports' },
   { key: 'jobs', label: 'Jobs Completed', short: 'Jobs' },
   { key: 'fwa', label: 'FWAs Turned In', short: 'FWAs' },
   { key: 'callbacks', label: 'Warranty Callbacks', short: 'Callbacks' },
@@ -43,6 +45,7 @@ export const RULE_FIELDS: { key: keyof Rules; label: string; help: (r: Rules) =>
   { key: 'drivingSafe', label: 'Driving at/above cutoff', step: 0.25, help: (r) => `Points for a truck driver's driving score of ${r.drivingCutoff}+.` },
   { key: 'drivingUnsafe', label: 'Driving below cutoff', step: 0.25, help: (r) => `Points for a truck driver's driving score under ${r.drivingCutoff}.` },
   { key: 'drivingPerfect', label: 'Driving score of 100 (perfect)', step: 0.25, help: () => 'Points for a truck driver with a perfect driving score of 100.' },
+  { key: 'report', label: 'Report turned in', step: 0.25, help: () => 'Points for every report turned in — LOTO reports and equipment inspection reports (scissor lift, man lift, ladder, trailer). Assistants only.' },
   { key: 'job', label: 'Job completed', step: 0.25, help: () => 'Points for every job you complete.' },
   { key: 'fwa', label: 'FWA turned in', step: 0.25, help: () => 'Points for every Field Work Authorization turned in.' },
   { key: 'callback', label: 'Warranty callback', step: 0.25, help: () => 'Points for every warranty callback.' },
@@ -74,15 +77,18 @@ export function drivingPoints(score: number | undefined, rules: Rules) {
   return rules.drivingUnsafe
 }
 
-// Driving only counts for truck drivers — people with a truck number.
-// Everyone else (assistants riding along) scores no driving points, even
-// if a driving score was entered for them in the past.
-export function scoreEntry(entry: Entry | undefined, rules: Rules, countsDriving = true) {
+// Drivers (people with a truck number) earn driving points; everyone else
+// (assistants riding along) earns report points instead — reports turned
+// in, like LOTO reports and equipment inspections. A driving score or a
+// report count entered for the wrong group earns nothing.
+export function scoreEntry(entry: Entry | undefined, rules: Rules, isDriver = true) {
   if (!entry) return 0
   const n = (k: StatKey) => entry[k] ?? 0
-  const driving = countsDriving ? drivingPoints(entry.driving, rules) : 0
+  const driving = isDriver ? drivingPoints(entry.driving, rules) : 0
+  const reports = isDriver ? 0 : n('reports') * rules.report
   return (
     driving +
+    reports +
     n('jobs') * rules.job +
     n('fwa') * rules.fwa +
     n('callbacks') * rules.callback +

@@ -6,6 +6,7 @@ export type Person = { id: string; name: string; role: Role; truck?: string; act
 
 export const STAT_KEYS = [
   'driving',
+  'reports',
   'jobs',
   'fwa',
   'callbacks',
@@ -26,6 +27,7 @@ export type Rules = {
   drivingSafe: number
   drivingUnsafe: number
   drivingPerfect: number
+  report: number
   job: number
   fwa: number
   callback: number

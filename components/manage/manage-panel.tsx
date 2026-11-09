@@ -3,7 +3,7 @@
 import { LogOut, Plus, Shuffle, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
-import { addPerson, changePasscode, redrawTeams, removePerson, saveRules, saveSettings, setTeam, signOut } from '@/app/actions'
+import { addPerson, changePasscode, redrawTeams, removePerson, saveRules, saveSettings, setTeam, setTruck, signOut } from '@/app/actions'
 import { Button } from '@/components/ui/button'
 import { BONUS_RULE_FIELDS, RULE_FIELDS } from '@/lib/scoring'
 import type { Person, Role, Rules, TeamKey } from '@/lib/types'
@@ -99,6 +99,24 @@ export function ManagePanel({
               <span className="min-w-0 flex-1 truncate text-sm">
                 {p.name} <span className="text-muted-foreground">· {p.role === 'tech' ? 'Tech' : 'Asst'}</span>
               </span>
+              <input
+                type="text"
+                inputMode="numeric"
+                aria-label={`Truck number for ${p.name}`}
+                title="Truck number"
+                defaultValue={p.truck ?? ''}
+                placeholder="#"
+                maxLength={6}
+                disabled={pending}
+                onBlur={(e) => {
+                  const v = e.target.value.replace(/\D/g, '').slice(0, 6)
+                  if (v !== (p.truck ?? '')) run(() => setTruck(p.id, v), v === '' ? `${p.name} truck cleared` : `${p.name} truck #${v}`)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                }}
+                className="w-16 shrink-0 rounded-lg border border-input bg-background px-2 py-1.5 text-center text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
               <div className="flex rounded-lg bg-secondary p-0.5" role="group" aria-label={`Team for ${p.name}`}>
                 {(['red', 'blue'] as TeamKey[]).map((t) => (
                   <button

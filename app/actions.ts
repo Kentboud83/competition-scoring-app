@@ -144,6 +144,19 @@ export async function updatePerson(id: string, name: string, role: Role): Promis
   return { ok: true }
 }
 
+// Truck number for one person. Digits only; empty clears it (stored as ""
+// so the seed backfill in readStore does not re-add it).
+export async function setTruck(id: string, truck: string): Promise<Result> {
+  await requireManager()
+  const clean = String(truck ?? '').replace(/\D/g, '').slice(0, 6)
+  await mutateStore((store) => {
+    const p = store.people.find((x) => x.id === id)
+    if (p) p.truck = clean
+  })
+  refreshAll()
+  return { ok: true }
+}
+
 export async function removePerson(id: string): Promise<Result> {
   await requireManager()
   await mutateStore((store) => {

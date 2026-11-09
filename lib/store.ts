@@ -5,7 +5,7 @@ import path from 'node:path'
 
 import seed from './seed.json'
 import { DEFAULT_RULES } from './scoring'
-import type { Store } from './types'
+import type { Person, Store } from './types'
 
 const KV_KEY = 'weekly-showdown'
 const useKv = Boolean(
@@ -43,6 +43,7 @@ export async function readStore(): Promise<Store> {
       // while any custom point values already stored are preserved.
       return {
         ...stored,
+        people: withTrucks(stored.people),
         rules: { ...DEFAULT_RULES, ...(stored.rules ?? {}) },
         views: typeof stored.views === 'number' ? stored.views : 0,
       }
@@ -55,12 +56,27 @@ export async function readStore(): Promise<Store> {
     const stored = JSON.parse(raw) as Store
     return {
       ...stored,
+      people: withTrucks(stored.people),
       rules: { ...DEFAULT_RULES, ...(stored.rules ?? {}) },
       views: typeof stored.views === 'number' ? stored.views : 0,
     }
   } catch {
     return initialStore()
   }
+}
+
+// Truck numbers live on the seed roster. The live store predates the truck
+// field, so anyone without one gets the seed value (matched by id) —
+// this is how the truck numbers reach the live app, since the
+// Vercel-managed database's data browser is read-only and cannot be
+// edited directly. A truck set in the live store always wins; a truck
+// deliberately cleared there is stored as "" and is never re-filled.
+const seedTrucks = new Map(
+  (seed.people as { id: string; truck?: string }[]).filter((p) => p.truck).map((p) => [p.id, p.truck as string]),
+)
+
+function withTrucks(people: Person[]): Person[] {
+  return people.map((p) => (p.truck === undefined && seedTrucks.has(p.id) ? { ...p, truck: seedTrucks.get(p.id) } : p))
 }
 
 let queue: Promise<unknown> = Promise.resolve()

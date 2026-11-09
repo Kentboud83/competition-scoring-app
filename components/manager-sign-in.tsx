@@ -38,7 +38,7 @@ export function ManagerSignIn({ firstRun }: { firstRun: boolean }) {
         <p className="mt-1 text-sm text-muted-foreground">
           {firstRun
             ? 'Choose a passcode. Only people with it can enter scores or change settings.'
-            : 'Enter the manager passcode to enter scores. Everyone else can view the board.'}
+            : 'Enter the manager passcode to enter scores or change settings.'}
         </p>
       </div>
       <label className="flex flex-col gap-1.5 text-sm font-medium">

@@ -1,3 +1,5 @@
+import type { ManagerId } from '@/lib/managers'
+
 export type Role = 'tech' | 'asst'
 export type TeamKey = 'red' | 'blue'
 export type View = 'week' | 'month'
@@ -47,7 +49,15 @@ export type Rules = {
   bonusHitTheMark: number
 }
 
-export type Comment = { id: string; personId: string; text: string; createdAt: string }
+export type Comment = {
+  id: string
+  /** Roster person id for a competitor's comment; '' for a manager's comment. */
+  personId: string
+  /** Which manager posted it, when it is a manager's comment. */
+  managerId?: ManagerId
+  text: string
+  createdAt: string
+}
 export type Announcement = { id: string; text: string; createdAt: string }
 
 export type Store = {

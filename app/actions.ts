@@ -412,13 +412,21 @@ export async function resetCompetitorPasscode(personId: string): Promise<Result>
 const cleanFeedText = (text: unknown) => String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, 500)
 
 export async function addComment(text: string): Promise<Result> {
-  const me = await requireCompetitor()
+  const session = await getSessionState()
   const clean = cleanFeedText(text)
   if (!clean) return { ok: false, error: 'Write something first.' }
+  // Managers post as themselves (managerId, no roster person); competitors
+  // post under their own name. Anyone else gets turned away.
+  const author = session.manager
+    ? { personId: '', managerId: session.manager.id }
+    : session.competitor
+      ? { personId: session.competitor.id }
+      : null
+  if (!author) return { ok: false, error: 'Sign in to post.' }
   await mutateStore(
     (store) => {
       const list = store.comments ?? []
-      list.unshift({ id: randomBytes(12).toString('hex'), personId: me.id, text: clean, createdAt: new Date().toISOString() })
+      list.unshift({ id: randomBytes(12).toString('hex'), ...author, text: clean, createdAt: new Date().toISOString() })
       store.comments = list.slice(0, 200)
     },
     { preserveUpdatedAt: true },

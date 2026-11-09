@@ -11,7 +11,8 @@ type FeedComment = {
   id: string
   personId: string
   name: string
-  team: 'red' | 'blue'
+  team: 'red' | 'blue' | null
+  manager: boolean
   text: string
   createdAt: string
 }
@@ -39,11 +40,12 @@ function timeAgo(iso: string) {
   return new Date(then).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-// Comments & Smack Talkin': the live feed. Announcements from Kent sit
-// pinned at the top; below them, every signed-in competitor's comments,
-// compliments and smack talk, newest first, refreshing on their own.
-// Anyone can read; only signed-in competitors can post, and only Kent can
-// post announcements. A comment's author (or Kent) can delete it.
+// Comments & Smack Talkin': the live feed. Announcements from the managers
+// sit pinned at the top in their own highlighted cards; below them, every
+// signed-in competitor's — and manager's — comments, compliments and smack
+// talk, newest first, refreshing on their own. A manager's comment shows
+// their name with a Manager tag and no team dot. A comment's author (or any
+// manager) can delete it.
 export function CommentsBoard({ isManager, me }: { isManager: boolean; me: string | null }) {
   const { data, error, isLoading, mutate } = useSWR<Feed>('/api/comments', fetcher, {
     refreshInterval: 5_000,
@@ -183,7 +185,7 @@ export function CommentsBoard({ isManager, me }: { isManager: boolean; me: strin
         </section>
       )}
 
-      {me ? (
+      {me || isManager ? (
         <form onSubmit={postComment} className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-4">
           <label htmlFor="comment" className="text-sm font-semibold">
             Say it
@@ -207,7 +209,7 @@ export function CommentsBoard({ isManager, me }: { isManager: boolean; me: strin
         </form>
       ) : (
         <p className="rounded-2xl border border-border bg-card p-4 text-center text-sm text-muted-foreground">
-          You&apos;re signed in as manager — you can read the feed and post announcements above.
+          Sign in to join the conversation.
         </p>
       )}
 
@@ -226,12 +228,20 @@ export function CommentsBoard({ isManager, me }: { isManager: boolean; me: strin
           {comments.map((c) => (
             <li key={c.id} className="flex items-start gap-3 rounded-2xl border border-border bg-card px-4 py-3">
               <span
-                className={cn('mt-1.5 size-2.5 shrink-0 rounded-full', c.team === 'red' ? 'bg-team-red' : 'bg-team-blue')}
+                className={cn(
+                  'mt-1.5 size-2.5 shrink-0 rounded-full',
+                  c.manager ? 'bg-amber-400' : c.team === 'red' ? 'bg-team-red' : 'bg-team-blue',
+                )}
                 aria-hidden="true"
               />
               <div className="min-w-0 flex-1">
                 <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
                   <span className="font-semibold">{c.name}</span>
+                  {c.manager && (
+                    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-400">
+                      Manager
+                    </span>
+                  )}
                   <span className="text-xs text-muted-foreground">{timeAgo(c.createdAt)}</span>
                 </p>
                 <p className="mt-0.5 text-sm break-words">{c.text}</p>

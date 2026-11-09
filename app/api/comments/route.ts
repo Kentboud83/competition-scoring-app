@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getCompetitor, isManager } from '@/lib/auth'
 import { todayISO } from '@/lib/dates'
+import { MANAGERS } from '@/lib/managers'
 import { readStore } from '@/lib/store'
 import { teamsForMonth } from '@/lib/teams'
 
@@ -9,7 +10,9 @@ export const dynamic = 'force-dynamic'
 // The live feed: comments (newest first) with the author's name and current
 // team, plus the manager's announcements. The feed is for the team only:
 // a competitor or the manager must be signed in to read it. Posting
-// requires a competitor sign-in, which the server actions enforce.
+// requires a competitor or manager sign-in, which the server actions
+// enforce. A manager's comment carries their name with no team — the
+// client marks it with a Manager tag instead of a team dot.
 export async function GET() {
   const me = await getCompetitor()
   const manager = await isManager()
@@ -20,12 +23,25 @@ export async function GET() {
   const teams = teamsForMonth(store, todayISO().slice(0, 7))
   const byId = new Map(store.people.map((p) => [p.id, p]))
   const comments = (store.comments ?? []).map((c) => {
+    if (c.managerId) {
+      const m = MANAGERS.find((x) => x.id === c.managerId)
+      return {
+        id: c.id,
+        personId: c.personId,
+        name: m?.name ?? 'Manager',
+        team: null,
+        manager: true,
+        text: c.text,
+        createdAt: c.createdAt,
+      }
+    }
     const p = byId.get(c.personId)
     return {
       id: c.id,
       personId: c.personId,
       name: p?.name ?? 'Someone',
       team: teams[c.personId] ?? 'red',
+      manager: false,
       text: c.text,
       createdAt: c.createdAt,
     }

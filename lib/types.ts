@@ -2,7 +2,7 @@ export type Role = 'tech' | 'asst'
 export type TeamKey = 'red' | 'blue'
 export type View = 'week' | 'month'
 
-export type Person = { id: string; name: string; role: Role; active?: boolean }
+export type Person = { id: string; name: string; role: Role; truck?: string; active?: boolean }
 
 export const STAT_KEYS = [
   'driving',

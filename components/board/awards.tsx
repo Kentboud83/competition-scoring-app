@@ -105,6 +105,7 @@ function AwardCard({
                 aria-hidden="true"
               />
               {award.name}
+              {award.truck ? <span className="font-normal text-muted-foreground"> #{award.truck}</span> : null}
             </p>
             <p className="text-xs text-muted-foreground">{detail ?? `${formatPts(award.points)} pts`}</p>
             {subdetail ? (

@@ -39,10 +39,10 @@ export const STAT_FIELDS: { key: StatKey; label: string; short: string; step?: n
 ]
 
 export const RULE_FIELDS: { key: keyof Rules; label: string; help: (r: Rules) => string; step: number }[] = [
-  { key: 'drivingCutoff', label: 'Driving score cutoff', step: 1, help: (r) => `A weekly driving score of ${r.drivingCutoff} or higher counts as a safe week.` },
-  { key: 'drivingSafe', label: 'Driving at/above cutoff', step: 0.25, help: (r) => `Points for a driving score of ${r.drivingCutoff}+.` },
-  { key: 'drivingUnsafe', label: 'Driving below cutoff', step: 0.25, help: (r) => `Points for a driving score under ${r.drivingCutoff}.` },
-  { key: 'drivingPerfect', label: 'Driving score of 100 (perfect)', step: 0.25, help: () => 'Points for a perfect driving score of 100.' },
+  { key: 'drivingCutoff', label: 'Driving score cutoff', step: 1, help: (r) => `A truck driver's weekly driving score of ${r.drivingCutoff} or higher counts as a safe week.` },
+  { key: 'drivingSafe', label: 'Driving at/above cutoff', step: 0.25, help: (r) => `Points for a truck driver's driving score of ${r.drivingCutoff}+.` },
+  { key: 'drivingUnsafe', label: 'Driving below cutoff', step: 0.25, help: (r) => `Points for a truck driver's driving score under ${r.drivingCutoff}.` },
+  { key: 'drivingPerfect', label: 'Driving score of 100 (perfect)', step: 0.25, help: () => 'Points for a truck driver with a perfect driving score of 100.' },
   { key: 'job', label: 'Job completed', step: 0.25, help: () => 'Points for every job you complete.' },
   { key: 'fwa', label: 'FWA turned in', step: 0.25, help: () => 'Points for every Field Work Authorization turned in.' },
   { key: 'callback', label: 'Warranty callback', step: 0.25, help: () => 'Points for every warranty callback.' },
@@ -65,11 +65,22 @@ export const BONUS_RULE_FIELDS: { key: keyof Rules; label: string; help: (r: Rul
   { key: 'bonusHitTheMark', label: 'Each "Hit the Mark" card filled out', step: 0.25, help: () => 'Points for each "Hit the Mark" card filled out.' },
 ]
 
-export function scoreEntry(entry: Entry | undefined, rules: Rules) {
+// Points a single weekly driving score earns. Shared by scoreEntry and
+// the breakdown so the two can never disagree.
+export function drivingPoints(score: number | undefined, rules: Rules) {
+  if (score === undefined) return 0
+  if (score === 100) return rules.drivingPerfect
+  if (score >= rules.drivingCutoff) return rules.drivingSafe
+  return rules.drivingUnsafe
+}
+
+// Driving only counts for truck drivers — people with a truck number.
+// Everyone else (assistants riding along) scores no driving points, even
+// if a driving score was entered for them in the past.
+export function scoreEntry(entry: Entry | undefined, rules: Rules, countsDriving = true) {
   if (!entry) return 0
   const n = (k: StatKey) => entry[k] ?? 0
-  const driving =
-    entry.driving === undefined ? 0 : entry.driving === 100 ? rules.drivingPerfect : entry.driving >= rules.drivingCutoff ? rules.drivingSafe : rules.drivingUnsafe
+  const driving = countsDriving ? drivingPoints(entry.driving, rules) : 0
   return (
     driving +
     n('jobs') * rules.job +

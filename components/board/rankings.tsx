@@ -157,7 +157,10 @@ export function Rankings({ board }: { board: Board }) {
                       className="flex w-full items-center gap-3 px-4 py-3 text-left"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium">{r.name}</p>
+                        <p className="truncate font-medium">
+                          {r.name}
+                          {r.truck ? <span className="font-normal text-muted-foreground"> #{r.truck}</span> : null}
+                        </p>
                         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <span className={cn('size-2 rounded-full', r.team === 'red' ? 'bg-team-red' : 'bg-team-blue')} aria-hidden="true" />
                           {team?.name} · {r.role === 'tech' ? 'Tech' : 'Asst'}

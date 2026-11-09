@@ -1,0 +1,12 @@
+# Dependencies and build output — never commit these.
+node_modules
+.next
+*.tsbuildinfo
+pnpm-lock.yaml
+
+# Local dev data (live session/passcode data lives here) — never commit.
+.data
+
+# Local env and Vercel CLI state.
+.env*.local
+.vercel

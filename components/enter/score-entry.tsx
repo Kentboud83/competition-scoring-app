@@ -54,7 +54,7 @@ export function ScoreEntry({
   const [pending, start] = useTransition()
 
   const totals = useMemo(
-    () => Object.fromEntries(people.map((p) => [p.id, scoreEntry(toEntry(draft[p.id]), rules)])),
+    () => Object.fromEntries(people.map((p) => [p.id, scoreEntry(toEntry(draft[p.id]), rules, !!p.truck)])),
     [draft, people, rules],
   )
 
@@ -66,7 +66,15 @@ export function ScoreEntry({
 
   const save = () =>
     start(async () => {
-      const payload = Object.fromEntries(people.map((p) => [p.id, toEntry(draft[p.id])]))
+      const payload = Object.fromEntries(
+        people.map((p) => {
+          const e = toEntry(draft[p.id])
+          // Driving scores are gone for anyone without a truck: leaving
+          // the value out here removes it from the stored week entry.
+          if (!p.truck) delete e.driving
+          return [p.id, e]
+        }),
+      )
       const res = await saveWeekScores(friday, payload)
       if (res.ok) {
         setDirty(false)
@@ -114,7 +122,10 @@ export function ScoreEntry({
               >
                 <span className={cn('size-2.5 shrink-0 rounded-full', p.team === 'red' ? 'bg-team-red' : 'bg-team-blue')} aria-hidden="true" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{p.name}</span>
+                  <span className="block truncate font-medium">
+                    {p.name}
+                    {p.truck ? <span className="font-normal text-muted-foreground"> #{p.truck}</span> : null}
+                  </span>
                   <span className="text-xs text-muted-foreground">
                     {p.role === 'tech' ? 'Tech' : 'Asst'} · {teamNames[p.team]}
                   </span>
@@ -125,7 +136,7 @@ export function ScoreEntry({
               </button>
               {isOpen && (
                 <div id={`entry-${p.id}`} className="grid grid-cols-2 gap-3 border-t border-border p-4 sm:grid-cols-3">
-                  {STAT_FIELDS.map((f) => (
+                  {STAT_FIELDS.filter((f) => f.key !== 'driving' || p.truck).map((f) => (
                     <label key={f.key} className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
                       {f.label}
                       <input

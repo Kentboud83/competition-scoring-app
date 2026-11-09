@@ -1,7 +1,7 @@
 import { addDays, fridayOf, monthLabel, monthOf, prevMonth, weekLabel } from './dates'
-import { hasEntry, scoreEntry, STAT_FIELDS } from './scoring'
+import { drivingPoints, hasEntry, scoreEntry, STAT_FIELDS } from './scoring'
 import { teamsForMonth } from './teams'
-import type { Entry, Role, Rules, Store, TeamKey, View } from './types'
+import type { Entry, Person, Role, Rules, Store, TeamKey, View } from './types'
 
 export type BreakdownLine = {
   key: string
@@ -12,10 +12,13 @@ export type BreakdownLine = {
   detail?: string
 }
 
+export type DrivingWeek = { friday: string; score: number }
+
 export type BoardRow = {
   id: string
   name: string
   role: Role
+  truck?: string
   team: TeamKey
   rank: number
   week: number
@@ -26,6 +29,8 @@ export type BoardRow = {
   fwaMonth: number
   entered: boolean
   breakdown: BreakdownLine[]
+  /** Raw driving scores: this week's score, every scored week this month, and the driving points in the current view. */
+  driving: { week: number | null; weeks: DrivingWeek[]; points: number }
 }
 
 export type TeamSummary = {
@@ -39,7 +44,7 @@ export type TeamSummary = {
   jobsMonth: number
 }
 
-export type Award = { name: string; points: number; team: TeamKey } | null
+export type Award = { name: string; points: number; team: TeamKey; truck?: string } | null
 
 export type Board = {
   view: View
@@ -62,13 +67,15 @@ function weeksInMonth(store: Store, month: string) {
   return Object.keys(store.scores).filter((f) => monthOf(f) === month)
 }
 
-function pointsFor(store: Store, id: string, fridays: string[]) {
+function pointsFor(store: Store, person: Person, fridays: string[]) {
   let total = 0
   let entered = false
+  // Driving only counts for truck drivers (see lib/scoring.ts).
+  const countsDriving = !!person.truck
   for (const f of fridays) {
-    const e = store.scores[f]?.[id]
+    const e = store.scores[f]?.[person.id]
     if (hasEntry(e)) entered = true
-    total += scoreEntry(e, store.rules)
+    total += scoreEntry(e, store.rules, countsDriving)
   }
   return { total, entered }
 }
@@ -86,7 +93,7 @@ const clean = (n: number) => {
 // safe (at/above the cutoff, below 100) vs unsafe at the driving cutoff,
 // instead of summing the raw driving scores.
 // Bonus is 1:1 in scoreEntry (there is no bonus rule value), so its rate is 1.
-export function computeBreakdown(entries: Entry[], rules: Rules): BreakdownLine[] {
+export function computeBreakdown(entries: Entry[], rules: Rules, countsDriving = true): BreakdownLine[] {
   const rates: Record<string, number> = {
     jobs: rules.job,
     fwa: rules.fwa,
@@ -102,21 +109,22 @@ export function computeBreakdown(entries: Entry[], rules: Rules): BreakdownLine[
   const lines: BreakdownLine[] = []
   for (const field of STAT_FIELDS) {
     if (field.key === 'driving') {
+      // No driving line for people without a truck: their driving score
+      // earns no points, so there is nothing to break down.
+      if (!countsDriving) continue
       let safeWeeks = 0
       let unsafeWeeks = 0
       let perfectWeeks = 0
-      let drivingPoints = 0
+      let drivingPointsTotal = 0
       for (const e of entries) {
         if (e.driving == null) continue
+        drivingPointsTotal += drivingPoints(e.driving, rules)
         if (e.driving === 100) {
           perfectWeeks += 1
-          drivingPoints += rules.drivingPerfect
         } else if (e.driving >= rules.drivingCutoff) {
           safeWeeks += 1
-          drivingPoints += rules.drivingSafe
         } else {
           unsafeWeeks += 1
-          drivingPoints += rules.drivingUnsafe
         }
       }
       if (safeWeeks > 0 || unsafeWeeks > 0 || perfectWeeks > 0) {
@@ -128,7 +136,7 @@ export function computeBreakdown(entries: Entry[], rules: Rules): BreakdownLine[
           key: 'driving',
           label: 'Driving',
           raw: safeWeeks + unsafeWeeks + perfectWeeks,
-          points: clean(drivingPoints),
+          points: clean(drivingPointsTotal),
           detail: parts.join(', '),
         })
       }
@@ -151,9 +159,9 @@ export function computeBoard(store: Store, date: string, view: View): Board {
   const prevFridays = view === 'week' ? [prev] : weeksInMonth(store, prevMonth(month))
   const active = store.people.filter((p) => p.active !== false)
   const base = active.map((p) => {
-    const week = pointsFor(store, p.id, [friday])
-    const monthPts = pointsFor(store, p.id, monthWeeks)
-    const prior = pointsFor(store, p.id, prevFridays)
+    const week = pointsFor(store, p, [friday])
+    const monthPts = pointsFor(store, p, monthWeeks)
+    const prior = pointsFor(store, p, prevFridays)
     const points = view === 'week' ? week.total : monthPts.total
     const current = view === 'week' ? week : monthPts
     let jobsMonth = 0
@@ -167,11 +175,25 @@ export function computeBoard(store: Store, date: string, view: View): Board {
     const periodEntries = periodFridays
       .map((f) => store.scores[f]?.[p.id])
       .filter((e): e is Entry => !!e && hasEntry(e))
-    const breakdown = computeBreakdown(periodEntries, store.rules)
+    const breakdown = computeBreakdown(periodEntries, store.rules, !!p.truck)
+    // Raw driving scores for the Driving tab: this week's score, every
+    // scored week this month, and the driving points in the current view
+    // (zero for anyone without a truck).
+    const drivingWeeks: DrivingWeek[] = monthWeeks
+      .map((f) => ({ friday: f, score: store.scores[f]?.[p.id]?.driving }))
+      .filter((w): w is DrivingWeek => typeof w.score === 'number')
+    const driving = {
+      week: store.scores[friday]?.[p.id]?.driving ?? null,
+      weeks: drivingWeeks,
+      points: p.truck
+        ? clean(periodFridays.reduce((s, f) => s + drivingPoints(store.scores[f]?.[p.id]?.driving, store.rules), 0))
+        : 0,
+    }
     return {
       id: p.id,
       name: p.name,
       role: p.role,
+      truck: p.truck,
       team: teamMap[p.id] ?? 'red',
       week: week.total,
       month: monthPts.total,
@@ -180,6 +202,7 @@ export function computeBoard(store: Store, date: string, view: View): Board {
       jobsMonth,
       fwaMonth,
       breakdown,
+      driving,
       prior: prior.entered && current ? points - prior.total : null,
     }
   })
@@ -216,7 +239,7 @@ export function computeBoard(store: Store, date: string, view: View): Board {
   const leader: TeamKey | 'tie' | null = !anyScores ? null : red.points === blue.points ? 'tie' : red.points > blue.points ? 'red' : 'blue'
   const best = (role: Role) => {
     const r = rows.find((x) => x.role === role && x.entered)
-    return r ? { name: r.name, points: r.points, team: r.team } : null
+    return r ? { name: r.name, points: r.points, team: r.team, truck: r.truck } : null
   }
   const improvedCandidate = base
     .filter((r) => r.prior !== null)
@@ -235,7 +258,7 @@ export function computeBoard(store: Store, date: string, view: View): Board {
     awards: {
       tech: best('tech'),
       asst: best('asst'),
-      improved: improvedCandidate ? { name: improvedCandidate.name, points: improvedCandidate.points, team: improvedCandidate.team, gain: improvedCandidate.prior ?? 0 } : null,
+      improved: improvedCandidate ? { name: improvedCandidate.name, points: improvedCandidate.points, team: improvedCandidate.team, truck: improvedCandidate.truck, gain: improvedCandidate.prior ?? 0 } : null,
     },
     jobs: {
       completed: store.jobsCompleted?.[month] ?? rows.reduce((s, r) => s + r.jobsMonth, 0),

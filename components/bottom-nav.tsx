@@ -1,6 +1,6 @@
 'use client'
 
-import { BookOpen, Crown, PencilLine, Settings2, Trophy } from 'lucide-react'
+import { BookOpen, Crown, Gauge, PencilLine, Settings2, Trophy } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 const items = [
   { href: '/', label: 'Board', icon: Trophy },
   { href: '/leaders', label: 'Leaders', icon: Crown },
+  { href: '/driving', label: 'Driving', icon: Gauge },
   { href: '/rules', label: 'Rules', icon: BookOpen },
   { href: '/enter', label: 'Enter Scores', icon: PencilLine },
   { href: '/manage', label: 'Manage', icon: Settings2 },

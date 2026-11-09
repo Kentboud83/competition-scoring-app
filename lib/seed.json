@@ -18,31 +18,37 @@
     {
       "id": "p3",
       "name": "Kaleb Harrington",
+      "truck": "866",
       "role": "tech"
     },
     {
       "id": "p4",
       "name": "Lance M Louque",
+      "truck": "895",
       "role": "tech"
     },
     {
       "id": "p5",
       "name": "Logan D Miller",
+      "truck": "3081",
       "role": "tech"
     },
     {
       "id": "p6",
       "name": "Muhammed Makke",
+      "truck": "828",
       "role": "tech"
     },
     {
       "id": "p7",
       "name": "Paul H Ruckman",
+      "truck": "3082",
       "role": "tech"
     },
     {
       "id": "p8",
       "name": "Billie White",
+      "truck": "799",
       "role": "tech"
     },
     {
@@ -53,6 +59,7 @@
     {
       "id": "p10",
       "name": "Don Van Norman",
+      "truck": "912",
       "role": "tech"
     },
     {
@@ -68,11 +75,13 @@
     {
       "id": "p13",
       "name": "Kent F Smith",
+      "truck": "782",
       "role": "asst"
     },
     {
       "id": "p14",
       "name": "Seth R Thibodeaux",
+      "truck": "3064",
       "role": "tech"
     }
   ],

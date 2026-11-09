@@ -1,7 +1,6 @@
 'use client'
 
 import { Megaphone, Send, Trash2 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import useSWR from 'swr'
 import { addAnnouncement, addComment, deleteAnnouncement, deleteComment } from '@/app/actions'
@@ -46,7 +45,6 @@ function timeAgo(iso: string) {
 // Anyone can read; only signed-in competitors can post, and only Kent can
 // post announcements. A comment's author (or Kent) can delete it.
 export function CommentsBoard({ isManager, me }: { isManager: boolean; me: string | null }) {
-  const router = useRouter()
   const { data, error, isLoading, mutate } = useSWR<Feed>('/api/comments', fetcher, {
     refreshInterval: 5_000,
     revalidateOnFocus: true,
@@ -126,7 +124,7 @@ export function CommentsBoard({ isManager, me }: { isManager: boolean; me: strin
       <div>
         <h1 className="font-display text-3xl font-bold uppercase tracking-wide">Comments &amp; Smack Talkin&apos;</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          The live feed — compliments, call-outs and smack talk from the team. Sign in to join in.
+          Compliments, call-outs and smack talk from the team — just for the team.
         </p>
       </div>
 
@@ -208,10 +206,9 @@ export function CommentsBoard({ isManager, me }: { isManager: boolean; me: strin
           </div>
         </form>
       ) : (
-        <div className="flex flex-col items-center gap-2 rounded-2xl border border-border bg-card p-6 text-center">
-          <p className="text-sm text-muted-foreground">Sign in under your name to post in the feed.</p>
-          <Button onClick={() => router.push('/login')}>Sign in to join the talk</Button>
-        </div>
+        <p className="rounded-2xl border border-border bg-card p-4 text-center text-sm text-muted-foreground">
+          You&apos;re signed in as manager — you can read the feed and post announcements above.
+        </p>
       )}
 
       {isLoading && comments.length === 0 ? (

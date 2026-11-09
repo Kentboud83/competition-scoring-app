@@ -1,21 +1,29 @@
 'use client'
 
-import { BookOpen, Crown, Gauge, PencilLine, Settings2, Trophy } from 'lucide-react'
+import { BookOpen, Crown, Gauge, MessageSquareText, PencilLine, Settings2, Trophy } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
-const items = [
+const baseItems = [
   { href: '/', label: 'Board', icon: Trophy },
   { href: '/leaders', label: 'Leaders', icon: Crown },
   { href: '/driving', label: 'Driving', icon: Gauge },
+  { href: '/comments', label: 'Smack Talk', icon: MessageSquareText },
   { href: '/rules', label: 'Rules', icon: BookOpen },
+]
+
+// Enter Scores and Manage only exist on the manager's view, once signed
+// in. Everyone else — signed-out visitors and signed-in competitors —
+// sees just the five tabs above.
+const managerItems = [
   { href: '/enter', label: 'Enter Scores', icon: PencilLine },
   { href: '/manage', label: 'Manage', icon: Settings2 },
 ]
 
-export function BottomNav() {
+export function BottomNav({ isManager }: { isManager: boolean }) {
   const pathname = usePathname()
+  const items = isManager ? [...baseItems, ...managerItems] : baseItems
   return (
     <nav
       aria-label="Main"

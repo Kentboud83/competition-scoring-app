@@ -3,7 +3,7 @@
 import { LogOut, Plus, Shuffle, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
-import { addPerson, changePasscode, redrawTeams, removePerson, saveRules, saveSettings, setTeam, setTruck, signOut } from '@/app/actions'
+import { addPerson, changePasscode, redrawTeams, removePerson, resetCompetitorPasscode, saveRules, saveSettings, setTeam, setTruck, signOut } from '@/app/actions'
 import { Button } from '@/components/ui/button'
 import { BONUS_RULE_FIELDS, RULE_FIELDS } from '@/lib/scoring'
 import type { Person, Role, Rules, TeamKey } from '@/lib/types'
@@ -33,6 +33,7 @@ export function ManagePanel({
   projection,
   jobsCompleted,
   views = 0,
+  logins = {},
 }: {
   month: string
   monthName: string
@@ -42,6 +43,8 @@ export function ManagePanel({
   projection?: number
     jobsCompleted?: number
   views?: number
+  /** Whether each person has set a competitor password yet. */
+  logins?: Record<string, boolean>
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
@@ -82,6 +85,35 @@ export function ManagePanel({
 
       <Section title="App views" description="Times the app has been opened">
         <p className="text-2xl font-bold tabular-nums">App views: {views}</p>
+      </Section>
+
+      <Section
+        title="Competitor logins"
+        description="Each person signs in under their own name with a password they set themselves the first time. If someone forgets theirs, reset it here — they set a new one the next time they sign in."
+      >
+        <ul className="flex flex-col gap-1.5">
+          {people.map((p) => (
+            <li key={p.id} className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-sm">{p.name}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {logins[p.id] ? 'Password set' : 'Not signed in yet'}
+              </span>
+              {logins[p.id] && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={pending}
+                  onClick={() =>
+                    confirm(`Reset ${p.name}'s password? They'll set a new one next time they sign in.`) &&
+                    run(() => resetCompetitorPasscode(p.id), `${p.name}'s password reset`)
+                  }
+                >
+                  Reset password
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
       </Section>
 
       <Section title={`${monthName} teams`} description="Teams are drawn randomly each month, balanced by role. Tap a person to switch teams.">

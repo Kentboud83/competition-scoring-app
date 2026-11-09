@@ -26,8 +26,33 @@ function initialStore(): Store {
     projections: seed.projections,
     jobsCompleted: {},
     views: 0,
-    auth: { sessions: [] },
+    comments: [],
+    announcements: [],
+    auth: { sessions: [], competitors: {}, competitorSessions: {} },
     updatedAt: new Date().toISOString(),
+  }
+}
+
+// The stored document predates the view counter, the comments feed and
+// competitor logins, so normalize anything missing instead of crashing or
+// resetting scores when a field is absent. The stored rules also predate
+// the bonus point values, so merge DEFAULT_RULES underneath: new fields
+// default to Kent's values while any custom point values already stored
+// are preserved.
+function normalizeStore(stored: Store): Store {
+  return {
+    ...stored,
+    people: withTrucks(stored.people),
+    rules: { ...DEFAULT_RULES, ...(stored.rules ?? {}) },
+    views: typeof stored.views === 'number' ? stored.views : 0,
+    comments: Array.isArray(stored.comments) ? stored.comments : [],
+    announcements: Array.isArray(stored.announcements) ? stored.announcements : [],
+    auth: {
+      ...(stored.auth ?? { sessions: [] }),
+      sessions: Array.isArray(stored.auth?.sessions) ? stored.auth.sessions : [],
+      competitors: stored.auth?.competitors ?? {},
+      competitorSessions: stored.auth?.competitorSessions ?? {},
+    },
   }
 }
 
@@ -36,17 +61,7 @@ export async function readStore(): Promise<Store> {
     try {
       const { kv } = await import('@vercel/kv')
       const stored = (await kv.get<Store>(KV_KEY)) ?? initialStore()
-      // The stored document predates the view counter, so a missing views
-      // value is 0 — never crash or reset scores when it is absent.
-      // The stored rules also predate the bonus point values, so merge
-      // DEFAULT_RULES underneath: new fields default to Kent's values
-      // while any custom point values already stored are preserved.
-      return {
-        ...stored,
-        people: withTrucks(stored.people),
-        rules: { ...DEFAULT_RULES, ...(stored.rules ?? {}) },
-        views: typeof stored.views === 'number' ? stored.views : 0,
-      }
+      return normalizeStore(stored)
     } catch {
       return initialStore()
     }
@@ -54,12 +69,7 @@ export async function readStore(): Promise<Store> {
   try {
     const raw = await fs.readFile(FILE, 'utf8')
     const stored = JSON.parse(raw) as Store
-    return {
-      ...stored,
-      people: withTrucks(stored.people),
-      rules: { ...DEFAULT_RULES, ...(stored.rules ?? {}) },
-      views: typeof stored.views === 'number' ? stored.views : 0,
-    }
+    return normalizeStore(stored)
   } catch {
     return initialStore()
   }

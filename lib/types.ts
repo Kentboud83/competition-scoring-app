@@ -47,6 +47,9 @@ export type Rules = {
   bonusHitTheMark: number
 }
 
+export type Comment = { id: string; personId: string; text: string; createdAt: string }
+export type Announcement = { id: string; text: string; createdAt: string }
+
 export type Store = {
   settings: { startDate: string; team1: string; team2: string }
   rules: Rules
@@ -62,6 +65,18 @@ export type Store = {
   jobsCompleted: Record<string, number>
   /** Total number of times the app has been opened (all visitors, including signed-out). Shown in Manage only. */
   views: number
-  auth: { salt?: string; hash?: string; sessions: string[] }
+  /** Smack-talk feed, newest first. Kept to the latest 200. */
+  comments: Comment[]
+  /** Manager announcements, newest first. */
+  announcements: Announcement[]
+  auth: {
+    salt?: string
+    hash?: string
+    sessions: string[]
+    /** Per-competitor passcodes, keyed by person id. A person sets their own the first time they sign in. */
+    competitors?: Record<string, { salt: string; hash: string }>
+    /** Competitor sessions: hashed token -> person id. */
+    competitorSessions?: Record<string, string>
+  }
   updatedAt: string
 }

@@ -4,6 +4,7 @@ import { Barlow_Condensed, Geist } from 'next/font/google'
 import { AppHeader } from '@/components/app-header'
 import { BottomNav } from '@/components/bottom-nav'
 import { ServiceWorker } from '@/components/service-worker'
+import { isManager } from '@/lib/auth'
 import './globals.css'
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
@@ -36,13 +37,14 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 }
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const manager = await isManager()
   return (
     <html lang="en" className={`${geist.variable} ${display.variable}`}>
       <body className="min-h-dvh bg-background font-sans antialiased">
         <AppHeader />
         <main className="mx-auto w-full max-w-3xl px-4 pb-28 pt-4">{children}</main>
-        <BottomNav />
+        <BottomNav isManager={manager} />
         <ServiceWorker />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

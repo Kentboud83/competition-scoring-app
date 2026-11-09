@@ -4,12 +4,16 @@ import { randomBytes } from 'node:crypto'
 import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import {
+  COMPETITOR_COOKIE,
   SESSION_COOKIE,
+  getCompetitor,
   hashPasscode,
   hashToken,
   isManager,
   newSessionToken,
+  requireCompetitor,
   requireManager,
+  setCompetitorCookie,
   setSessionCookie,
   verifyPasscode,
 } from '@/lib/auth'
@@ -250,4 +254,171 @@ export async function recordView(): Promise<void> {
   } catch {
     // A failed count must never break the Board load.
   }
+}
+
+// --- Competitor sign-in -------------------------------------------------
+// Each competitor signs in under their own name with a password they set
+// themselves the first time. There is no manager step: the first sign-in
+// for a name sets that person's password, later ones verify it. Kent can
+// reset a forgotten password from Manage (resetCompetitorPasscode), which
+// clears it so the person sets a new one next time they sign in.
+
+export async function competitorSignIn(personId: string, passcode: string): Promise<Result> {
+  const code = String(passcode ?? '').trim()
+  if (code.length < 4 || code.length > 64) return { ok: false, error: 'Password must be at least 4 characters.' }
+
+  // Verify BEFORE mutating, same as the manager sign-in: mutateStore
+  // returns the store, not the callback's value, so a wrong password
+  // checked inside the callback could never surface its error.
+  const current = await readStore()
+  const person = current.people.find((p) => p.id === personId && p.active !== false)
+  if (!person) return { ok: false, error: 'Pick your name from the list.' }
+  const creds = current.auth.competitors?.[personId]
+  if (creds && !verifyPasscode(code, creds.salt, creds.hash)) {
+    return { ok: false, error: 'That password is not correct.' }
+  }
+
+  const token = newSessionToken()
+  await mutateStore(
+    (store) => {
+      if (!store.auth.competitors) store.auth.competitors = {}
+      if (!store.auth.competitorSessions) store.auth.competitorSessions = {}
+      if (!store.auth.competitors[personId]) {
+        const salt = randomBytes(16).toString('hex')
+        store.auth.competitors[personId] = { salt, hash: hashPasscode(code, salt) }
+      }
+      store.auth.competitorSessions[hashToken(token)] = personId
+    },
+    { preserveUpdatedAt: true },
+  )
+
+  await setCompetitorCookie(token)
+  refreshAll()
+  return { ok: true }
+}
+
+export async function competitorSignOut(): Promise<Result> {
+  const jar = await cookies()
+  const token = jar.get(COMPETITOR_COOKIE)?.value
+  if (token) {
+    const hashed = hashToken(token)
+    await mutateStore(
+      (store) => {
+        if (store.auth.competitorSessions) delete store.auth.competitorSessions[hashed]
+      },
+      { preserveUpdatedAt: true },
+    )
+  }
+  jar.delete(COMPETITOR_COOKIE)
+  refreshAll()
+  return { ok: true }
+}
+
+export async function changeCompetitorPasscode(next: string): Promise<Result> {
+  const me = await requireCompetitor()
+  const code = String(next ?? '').trim()
+  if (code.length < 4 || code.length > 64) return { ok: false, error: 'Password must be at least 4 characters.' }
+  const jar = await cookies()
+  const current = hashToken(jar.get(COMPETITOR_COOKIE)?.value ?? '')
+  await mutateStore(
+    (store) => {
+      const salt = randomBytes(16).toString('hex')
+      if (!store.auth.competitors) store.auth.competitors = {}
+      store.auth.competitors[me.id] = { salt, hash: hashPasscode(code, salt) }
+      // Keep only this device signed in after a password change.
+      if (store.auth.competitorSessions) {
+        for (const [t, pid] of Object.entries(store.auth.competitorSessions)) {
+          if (pid === me.id && t !== current) delete store.auth.competitorSessions[t]
+        }
+      }
+    },
+    { preserveUpdatedAt: true },
+  )
+  return { ok: true }
+}
+
+// Kent's recovery path for a forgotten competitor password: clears it (and
+// that person's sessions) so they set a new one the next time they sign in.
+export async function resetCompetitorPasscode(personId: string): Promise<Result> {
+  await requireManager()
+  await mutateStore(
+    (store) => {
+      if (store.auth.competitors) delete store.auth.competitors[personId]
+      if (store.auth.competitorSessions) {
+        for (const [t, pid] of Object.entries(store.auth.competitorSessions)) {
+          if (pid === personId) delete store.auth.competitorSessions[t]
+        }
+      }
+    },
+    { preserveUpdatedAt: true },
+  )
+  refreshAll()
+  return { ok: true }
+}
+
+// --- Comments & announcements -------------------------------------------
+// The feed is chat, not scores: posting or deleting must not move the
+// Board's "Live · updated" time, so every write here preserves it.
+
+const cleanFeedText = (text: unknown) => String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, 500)
+
+export async function addComment(text: string): Promise<Result> {
+  const me = await requireCompetitor()
+  const clean = cleanFeedText(text)
+  if (!clean) return { ok: false, error: 'Write something first.' }
+  await mutateStore(
+    (store) => {
+      const list = store.comments ?? []
+      list.unshift({ id: randomBytes(12).toString('hex'), personId: me.id, text: clean, createdAt: new Date().toISOString() })
+      store.comments = list.slice(0, 200)
+    },
+    { preserveUpdatedAt: true },
+  )
+  refreshAll()
+  return { ok: true }
+}
+
+export async function deleteComment(id: string): Promise<Result> {
+  const manager = await isManager()
+  const me = manager ? null : await getCompetitor()
+  if (!manager && !me) return { ok: false, error: 'Sign in to delete a comment.' }
+  await mutateStore(
+    (store) => {
+      const c = (store.comments ?? []).find((x) => x.id === id)
+      if (!c) return
+      if (!manager && c.personId !== me?.id) return
+      store.comments = (store.comments ?? []).filter((x) => x.id !== id)
+    },
+    { preserveUpdatedAt: true },
+  )
+  refreshAll()
+  return { ok: true }
+}
+
+export async function addAnnouncement(text: string): Promise<Result> {
+  await requireManager()
+  const clean = cleanFeedText(text)
+  if (!clean) return { ok: false, error: 'Write something first.' }
+  await mutateStore(
+    (store) => {
+      const list = store.announcements ?? []
+      list.unshift({ id: randomBytes(12).toString('hex'), text: clean, createdAt: new Date().toISOString() })
+      store.announcements = list.slice(0, 50)
+    },
+    { preserveUpdatedAt: true },
+  )
+  refreshAll()
+  return { ok: true }
+}
+
+export async function deleteAnnouncement(id: string): Promise<Result> {
+  await requireManager()
+  await mutateStore(
+    (store) => {
+      store.announcements = (store.announcements ?? []).filter((x) => x.id !== id)
+    },
+    { preserveUpdatedAt: true },
+  )
+  refreshAll()
+  return { ok: true }
 }

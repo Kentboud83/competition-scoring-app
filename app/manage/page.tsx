@@ -30,6 +30,7 @@ export default async function ManagePage() {
       projection={store.projections[month]}
       jobsCompleted={store.jobsCompleted?.[month]}
       views={typeof store.views === 'number' ? store.views : 0}
+      logins={Object.fromEntries(store.people.map((p) => [p.id, Boolean(store.auth.competitors?.[p.id])]))}
     />
   )
 }

@@ -1,20 +1,41 @@
 'use client'
 
 import { Bell, BellOff } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-// Notifications are ON by default: the app asks for browser permission the
-// first time a signed-in person opens the Smack Talk tab, and subscribes
-// them when they allow it. Anyone who doesn't want them flips the toggle
-// off — that unsubscribes this device. The toggle never fakes "on": it
-// reads the real subscription state, so if the browser permission is
-// denied it shows off and says how to re-enable it.
+// Notifications are ON by default: the app shows a banner the first time
+// a signed-in person opens the Smack Talk tab, and tapping "Turn on
+// notifications" fires the phone's own permission prompt. Anyone who
+// doesn't want them flips the toggle off — that unsubscribes this device.
+// The toggle never fakes "on": it reads the real subscription state, so if
+// the browser permission is denied it shows off and says how to re-enable it.
+//
+// The native prompt is ONLY ever fired from a tap. Chrome on Android
+// allows the notification prompt only in response to a user gesture: a
+// no-gesture call on page load is silently dropped (resolves "default",
+// no prompt ever appears) or surfaces the system sheet at a moment the
+// user didn't ask for it and leaves the page stuck behind it. That
+// on-load auto-attempt was the freeze Kent hit on his phone, so it is
+// gone — the banner button is the way in.
 const ASKED_KEY = 'showdown-push-asked'
 const PREF_KEY = 'showdown-push-pref'
 
 type PushState = 'unsupported' | 'loading' | 'on' | 'off' | 'blocked'
+
+// Resolve with `fallback` if `promise` hasn't settled in `ms`. Used so a
+// stuck service worker or a slow push-service handshake can never leave
+// the toggle disabled forever — the UI always lands in a real state.
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms)
+  })
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer)
+  })
+}
 
 function urlBase64ToUint8Array(base64: string) {
   const padding = '='.repeat((4 - (base64.length % 4)) % 4)
@@ -38,7 +59,10 @@ function isStandalone() {
 async function getRegistration(): Promise<ServiceWorkerRegistration | null> {
   if (!('serviceWorker' in navigator)) return null
   try {
-    return await navigator.serviceWorker.ready
+    // serviceWorker.ready never resolves if the worker is stuck
+    // installing or updating — without the timeout the toggle would sit
+    // disabled in "loading" forever on a phone with a stale worker.
+    return await withTimeout(navigator.serviceWorker.ready, 5000, null)
   } catch {
     return null
   }
@@ -49,7 +73,6 @@ export function PushToggle() {
   const [busy, setBusy] = useState(false)
   const [showAsk, setShowAsk] = useState(false)
   const [note, setNote] = useState('')
-  const askedRef = useRef(false)
 
   const subscribe = useCallback(async (): Promise<boolean> => {
     const reg = await getRegistration()
@@ -59,10 +82,15 @@ export function PushToggle() {
       if (!res.ok) return false
       const { publicKey } = (await res.json()) as { publicKey?: string }
       if (!publicKey) return false
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
-      })
+      const sub = await withTimeout(
+        reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        }),
+        20000,
+        null,
+      )
+      if (!sub) return false
       const save = await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -78,10 +106,11 @@ export function PushToggle() {
     }
   }, [])
 
-  // First visit: notifications default on, so ask right away — with the
-  // one-line explanation shown in the banner first. The native prompt may
-  // need a tap in some browsers, so the banner's button is the fallback
-  // path and stays until the person decides.
+  // First visit: notifications default on, so show the banner explaining
+  // them. The native prompt fires ONLY when the person taps "Turn on
+  // notifications" (or the toggle) — that tap is the user gesture the
+  // phone needs to show its permission page. Nothing here calls
+  // Notification.requestPermission() on load: that was the freeze.
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -94,7 +123,7 @@ export function PushToggle() {
         return
       }
       const reg = await getRegistration()
-      const sub = reg ? await reg.pushManager.getSubscription() : null
+      const sub = reg ? await reg.pushManager.getSubscription().catch(() => null) : null
       if (cancelled) return
       if (sub) {
         setState('on')
@@ -116,38 +145,13 @@ export function PushToggle() {
           return true
         }
       })()
+      if (alreadyAsked) return
       setShowAsk(true)
-      if (alreadyAsked || askedRef.current) return
-      askedRef.current = true
-      try {
-        window.localStorage.setItem(ASKED_KEY, '1')
-      } catch {
-        // Private mode: just don't auto-ask again this session.
-      }
-      // Attempt the native prompt automatically. If the browser wants a
-      // gesture first, this resolves without granting and the banner below
-      // is the way in.
-      try {
-        const permission = await Notification.requestPermission()
-        if (cancelled) return
-        if (permission === 'granted') {
-          setBusy(true)
-          const ok = await subscribe()
-          setBusy(false)
-          if (cancelled) return
-          setState(ok ? 'on' : 'off')
-          if (ok) setShowAsk(false)
-        } else if (permission === 'denied') {
-          setState('blocked')
-        }
-      } catch {
-        // Banner stays as the fallback.
-      }
     })()
     return () => {
       cancelled = true
     }
-  }, [subscribe])
+  }, [])
 
   const turnOn = async () => {
     setBusy(true)

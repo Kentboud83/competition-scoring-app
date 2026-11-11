@@ -47,6 +47,11 @@ function normalizeStore(stored: Store): Store {
     views: typeof stored.views === 'number' ? stored.views : 0,
     comments: Array.isArray(stored.comments) ? stored.comments : [],
     announcements: Array.isArray(stored.announcements) ? stored.announcements : [],
+    push: {
+      vapidPublicKey: stored.push?.vapidPublicKey,
+      vapidPrivateKey: stored.push?.vapidPrivateKey,
+      subscriptions: Array.isArray(stored.push?.subscriptions) ? stored.push.subscriptions : [],
+    },
     auth: {
       ...(stored.auth ?? { sessions: [] }),
       sessions: Array.isArray(stored.auth?.sessions) ? stored.auth.sessions : [],

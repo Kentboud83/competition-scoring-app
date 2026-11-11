@@ -57,8 +57,19 @@ export type Comment = {
   managerId?: ManagerId
   text: string
   createdAt: string
+  /** Top-level comment this is a reply to. Absent for top-level comments. One level of threading only. */
+  parentId?: string
 }
-export type Announcement = { id: string; text: string; createdAt: string }
+export type Announcement = { id: string; text: string; createdAt: string; /** Which manager posted it. */ managerId?: ManagerId }
+
+/** One browser's push subscription, tied to the person who opted in. */
+export type PushSubscriptionRecord = {
+  /** Identifies the subscriber: `person:<roster id>` or `manager:<manager id>`. */
+  ownerKey: string
+  endpoint: string
+  keys: { p256dh: string; auth: string }
+  createdAt: string
+}
 
 export type Store = {
   settings: { startDate: string; team1: string; team2: string }
@@ -79,6 +90,15 @@ export type Store = {
   comments: Comment[]
   /** Manager announcements, newest first. */
   announcements: Announcement[]
+  /** Web Push (VAPID) state. Server-only: the private key and the
+      subscriptions are never exposed through any API route or client
+      payload — only the public key is served, to signed-in users, so
+      their browser can subscribe. */
+  push?: {
+    vapidPublicKey?: string
+    vapidPrivateKey?: string
+    subscriptions?: PushSubscriptionRecord[]
+  }
   auth: {
     salt?: string
     hash?: string

@@ -33,6 +33,7 @@ export async function GET() {
         manager: true,
         text: c.text,
         createdAt: c.createdAt,
+        parentId: c.parentId ?? null,
       }
     }
     const p = byId.get(c.personId)
@@ -44,10 +45,18 @@ export async function GET() {
       manager: false,
       text: c.text,
       createdAt: c.createdAt,
+      parentId: c.parentId ?? null,
     }
   })
+  // Announcements render twice: pinned at the top and in the feed in
+  // chronological order. They come from the same array — no duplicated
+  // storage, and posting one sends exactly one notification.
+  const announcements = (store.announcements ?? []).map((a) => {
+    const m = a.managerId ? MANAGERS.find((x) => x.id === a.managerId) : undefined
+    return { id: a.id, text: a.text, createdAt: a.createdAt, name: m?.name ?? 'Manager' }
+  })
   return NextResponse.json(
-    { comments, announcements: store.announcements ?? [] },
+    { comments, announcements },
     { headers: { 'Cache-Control': 'no-store' } },
   )
 }

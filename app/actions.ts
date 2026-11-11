@@ -1,6 +1,7 @@
 'use server'
 
 import { randomBytes } from 'node:crypto'
+import { after } from 'next/server'
 import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import {
@@ -21,6 +22,7 @@ import {
 import { MANAGERS } from '@/lib/managers'
 import { fridayOf, isISODate } from '@/lib/dates'
 import { DEFAULT_RULES } from '@/lib/scoring'
+import { notifyFeedPost, ownerKeyFor } from '@/lib/push'
 import { incrementViews, mutateStore, readStore } from '@/lib/store'
 import { STAT_KEYS, type Entry, type Role, type Rules, type TeamKey } from '@/lib/types'
 
@@ -411,7 +413,19 @@ export async function resetCompetitorPasscode(personId: string): Promise<Result>
 
 const cleanFeedText = (text: unknown) => String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, 500)
 
-export async function addComment(text: string): Promise<Result> {
+// Push goes out after the response, so a slow or failing push service can
+// never delay or break the post itself. notifyFeedPost itself never throws.
+const notifyLater = (opts: { authorKey: string; title: string; body: string }) => {
+  try {
+    after(() => notifyFeedPost(opts))
+  } catch {
+    void notifyFeedPost(opts)
+  }
+}
+
+const feedPreview = (text: string) => (text.length > 100 ? `${text.slice(0, 100)}…` : text)
+
+export async function addComment(text: string, parentId?: string): Promise<Result> {
   const session = await getSessionState()
   const clean = cleanFeedText(text)
   if (!clean) return { ok: false, error: 'Write something first.' }
@@ -423,14 +437,36 @@ export async function addComment(text: string): Promise<Result> {
       ? { personId: session.competitor.id }
       : null
   if (!author) return { ok: false, error: 'Sign in to post.' }
+  // Replies thread one level deep: replying to a reply targets the
+  // top-level comment. A parent that no longer exists is rejected rather
+  // than posted as an orphan.
+  let replyTo: string | undefined
+  if (parentId) {
+    const store = await readStore()
+    const parent = (store.comments ?? []).find((x) => x.id === parentId)
+    if (!parent) return { ok: false, error: 'That comment is gone.' }
+    replyTo = parent.parentId ?? parent.id
+  }
   await mutateStore(
     (store) => {
       const list = store.comments ?? []
-      list.unshift({ id: randomBytes(12).toString('hex'), ...author, text: clean, createdAt: new Date().toISOString() })
+      list.unshift({
+        id: randomBytes(12).toString('hex'),
+        ...author,
+        text: clean,
+        createdAt: new Date().toISOString(),
+        ...(replyTo ? { parentId: replyTo } : {}),
+      })
       store.comments = list.slice(0, 200)
     },
     { preserveUpdatedAt: true },
   )
+  const name = session.manager?.name ?? session.competitor?.name ?? 'Someone'
+  notifyLater({
+    authorKey: ownerKeyFor(author.personId, author.managerId),
+    title: replyTo ? `Smack Talk · ${name} replied` : `Smack Talk · ${name}`,
+    body: feedPreview(clean),
+  })
   refreshAll()
   return { ok: true }
 }
@@ -444,7 +480,10 @@ export async function deleteComment(id: string): Promise<Result> {
       const c = (store.comments ?? []).find((x) => x.id === id)
       if (!c) return
       if (!manager && c.personId !== me?.id) return
-      store.comments = (store.comments ?? []).filter((x) => x.id !== id)
+      // Deleting a top-level comment takes its replies with it, so they
+      // never sit orphaned without the thing they answered.
+      const doomed = new Set([id, ...(store.comments ?? []).filter((x) => x.parentId === id).map((x) => x.id)])
+      store.comments = (store.comments ?? []).filter((x) => !doomed.has(x.id))
     },
     { preserveUpdatedAt: true },
   )
@@ -453,17 +492,28 @@ export async function deleteComment(id: string): Promise<Result> {
 }
 
 export async function addAnnouncement(text: string): Promise<Result> {
-  await requireManager()
+  const session = await getSessionState()
+  if (!session.manager) return { ok: false, error: 'Manager sign-in required.' }
   const clean = cleanFeedText(text)
   if (!clean) return { ok: false, error: 'Write something first.' }
   await mutateStore(
     (store) => {
       const list = store.announcements ?? []
-      list.unshift({ id: randomBytes(12).toString('hex'), text: clean, createdAt: new Date().toISOString() })
+      list.unshift({
+        id: randomBytes(12).toString('hex'),
+        text: clean,
+        createdAt: new Date().toISOString(),
+        managerId: session.manager!.id,
+      })
       store.announcements = list.slice(0, 50)
     },
     { preserveUpdatedAt: true },
   )
+  notifyLater({
+    authorKey: ownerKeyFor('', session.manager.id),
+    title: `Announcement · ${session.manager.name}`,
+    body: feedPreview(clean),
+  })
   refreshAll()
   return { ok: true }
 }

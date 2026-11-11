@@ -1,7 +1,7 @@
 'use client'
 
 import { Bell, BellOff } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -11,6 +11,10 @@ import { cn } from '@/lib/utils'
 // doesn't want them flips the toggle off — that unsubscribes this device.
 // The toggle never fakes "on": it reads the real subscription state, so if
 // the browser permission is denied it shows off and says how to re-enable it.
+// It re-checks the permission every time the person returns to the tab, so
+// allowing it in the phone settings while the app is open un-blocks the
+// switch without a reload (there is also a "Check again" button on the
+// blocked card for the same re-check).
 //
 // The native prompt is ONLY ever fired from a tap. Chrome on Android
 // allows the notification prompt only in response to a user gesture: a
@@ -73,6 +77,9 @@ export function PushToggle() {
   const [busy, setBusy] = useState(false)
   const [showAsk, setShowAsk] = useState(false)
   const [note, setNote] = useState('')
+  // Guards the async re-checks so a stale one can't overwrite a newer
+  // result (focus and visibilitychange can fire back to back).
+  const runIdRef = useRef(0)
 
   const subscribe = useCallback(async (): Promise<boolean> => {
     const reg = await getRegistration()
@@ -106,52 +113,83 @@ export function PushToggle() {
     }
   }, [])
 
+  // Re-reads the real permission + subscription state and updates the UI.
+  // Runs on mount AND every time the person returns to the tab (window
+  // focus / visibilitychange): if they allowed notifications in the phone
+  // or browser settings while the app was open, the toggle used to stay
+  // stuck on the old 'blocked' state because this only ran once on mount.
+  // This only READS state — it never calls Notification.requestPermission();
+  // the native prompt still fires only from a tap (turnOn).
+  const refreshState = useCallback(async () => {
+    const runId = ++runIdRef.current
+    if (!('Notification' in window) || !('PushManager' in window)) {
+      setState('unsupported')
+      return
+    }
+    if (Notification.permission === 'denied') {
+      setState('blocked')
+      return
+    }
+    const reg = await getRegistration()
+    const sub = reg ? await reg.pushManager.getSubscription().catch(() => null) : null
+    if (runId !== runIdRef.current) return
+    if (sub) {
+      setState('on')
+      return
+    }
+    setState('off')
+    const pref = (() => {
+      try {
+        return window.localStorage.getItem(PREF_KEY)
+      } catch {
+        return null
+      }
+    })()
+    if (pref === 'off') return
+    const alreadyAsked = (() => {
+      try {
+        return window.localStorage.getItem(ASKED_KEY) === '1'
+      } catch {
+        return true
+      }
+    })()
+    if (alreadyAsked) return
+    setShowAsk(true)
+  }, [])
+
   // First visit: notifications default on, so show the banner explaining
   // them. The native prompt fires ONLY when the person taps "Turn on
   // notifications" (or the toggle) — that tap is the user gesture the
   // phone needs to show its permission page. Nothing here calls
   // Notification.requestPermission() on load: that was the freeze.
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      if (!('Notification' in window) || !('PushManager' in window)) {
-        setState('unsupported')
-        return
-      }
-      if (Notification.permission === 'denied') {
-        setState('blocked')
-        return
-      }
-      const reg = await getRegistration()
-      const sub = reg ? await reg.pushManager.getSubscription().catch(() => null) : null
-      if (cancelled) return
-      if (sub) {
-        setState('on')
-        return
-      }
-      setState('off')
-      const pref = (() => {
-        try {
-          return window.localStorage.getItem(PREF_KEY)
-        } catch {
-          return null
-        }
-      })()
-      if (pref === 'off') return
-      const alreadyAsked = (() => {
-        try {
-          return window.localStorage.getItem(ASKED_KEY) === '1'
-        } catch {
-          return true
-        }
-      })()
-      if (alreadyAsked) return
-      setShowAsk(true)
-    })()
-    return () => {
-      cancelled = true
+    refreshState()
+    const onFocus = () => {
+      refreshState()
     }
-  }, [])
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') refreshState()
+    }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [refreshState])
+
+  // Manual re-check for the blocked card: the person just allowed
+  // notifications in their phone/browser settings and taps this instead
+  // of leaving the page. Same read-only check as the focus refresh.
+  const checkAgain = async () => {
+    setBusy(true)
+    setNote('')
+    try {
+      await refreshState()
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const turnOn = async () => {
     setBusy(true)
@@ -270,10 +308,15 @@ export function PushToggle() {
         </button>
       </div>
       {state === 'blocked' && (
-        <p className="text-xs text-muted-foreground">
-          Notifications are blocked for this site. Turn them back on in your browser or phone settings, then flip this
-          switch on again.
-        </p>
+        <div className="flex flex-col items-start gap-2">
+          <p className="text-xs text-muted-foreground">
+            Notifications are blocked for this site. Turn them back on in your browser or phone settings, then tap Check
+            again — or just switch back to this tab and it will pick the change up.
+          </p>
+          <Button size="sm" variant="outline" onClick={checkAgain} disabled={busy}>
+            Check again
+          </Button>
+        </div>
       )}
       {needsInstall && state !== 'on' && (
         <p className="text-xs text-muted-foreground">

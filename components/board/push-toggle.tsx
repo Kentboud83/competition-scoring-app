@@ -7,10 +7,12 @@ import { cn } from '@/lib/utils'
 
 // Notifications are ON by default: the app shows a banner the first time
 // a signed-in person opens the Smack Talk tab, and tapping "Turn on
-// notifications" fires the phone's own permission prompt. Anyone who
-// doesn't want them flips the toggle off — that unsubscribes this device.
-// The toggle never fakes "on": it reads the real subscription state, so if
-// the browser permission is denied it shows off and says how to re-enable it.
+// notifications" fires the phone's own permission prompt. Once notifications
+// are ON, the whole control hides — the person who turned them on simply
+// no longer sees the switch, and turning them back off is only possible
+// from the browser/phone site settings (Kent's call). The toggle never
+// fakes "on": it reads the real subscription state, so if the browser
+// permission is denied it shows off and says how to re-enable it.
 // It re-checks the permission every time the person returns to the tab, so
 // allowing it in the phone settings while the app is open un-blocks the
 // switch without a reload (there is also a "Check again" button on the
@@ -261,6 +263,12 @@ export function PushToggle() {
         Push notifications aren&apos;t supported in this browser.
       </p>
     )
+  }
+
+  // Once notifications are ON, the control hides entirely — no banner, no
+  // switch. The only way back off is the browser/phone site settings.
+  if (state === 'on') {
+    return null
   }
 
   const needsInstall = isIOS() && !isStandalone()

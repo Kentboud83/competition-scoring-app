@@ -16,7 +16,7 @@ type Conversation = {
   unread: number
 }
 
-type ThreadMessage = { id: string; fromKey: string; text: string; createdAt: string; mine: boolean }
+type ThreadMessage = { id: string; fromKey: string; text: string; createdAt: string; readAt?: string | null; mine: boolean }
 
 const fetcher = (url: string) =>
   fetch(url).then((r) => {
@@ -208,6 +208,10 @@ export function MessagesBoard() {
                   <p className="text-sm break-words">{m.text}</p>
                   <p className={cn('mt-0.5 text-right text-[10px]', m.mine ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
                     {timeAgo(m.createdAt)}
+                    {/* Read receipt, on my own messages only: "Sent" until
+                        the other person opens the thread, then "Read …"
+                        once the server recorded readAt. */}
+                    {m.mine && (m.readAt ? ` · Read ${timeAgo(m.readAt)}` : ' · Sent')}
                   </p>
                 </div>
               </div>

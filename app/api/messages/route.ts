@@ -106,6 +106,9 @@ export async function GET(req: Request) {
         fromKey: m.fromKey,
         text: m.text,
         createdAt: m.createdAt,
+        // readAt is carried so the sender can see the read receipt on
+        // their own messages; the recipient's view ignores it.
+        readAt: m.readAt ?? null,
         mine: m.fromKey === me,
       }))
     // Opening the thread marks their messages to me as read — for me

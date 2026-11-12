@@ -112,10 +112,33 @@ export async function notifyDirectMessage(opts: {
   title: string
   body: string
 }): Promise<void> {
+  await notifyMessageRecipients({ recipientKeys: [opts.recipientKey], title: opts.title, body: opts.body })
+}
+
+// Send a push to several people: the other members of a group
+// conversation. The sender is never included — pass only the other
+// members' keys. Same best-effort discipline: never throws, never
+// blocks the send, dead subscriptions are pruned.
+export async function notifyGroupMessage(opts: {
+  recipientKeys: string[]
+  title: string
+  body: string
+}): Promise<void> {
+  await notifyMessageRecipients(opts)
+}
+
+// Shared fan-out for private-message pushes: one payload to every
+// subscription owned by one of the given keys.
+async function notifyMessageRecipients(opts: {
+  recipientKeys: string[]
+  title: string
+  body: string
+}): Promise<void> {
   try {
     const store = await readStore()
     const subs = store.push?.subscriptions ?? []
-    const targets = subs.filter((s) => s.ownerKey === opts.recipientKey)
+    const wanted = new Set(opts.recipientKeys)
+    const targets = subs.filter((s) => wanted.has(s.ownerKey))
     if (targets.length === 0) return
     const payload = JSON.stringify({ title: opts.title, body: opts.body, url: '/messages' })
     await sendTo(targets, payload)

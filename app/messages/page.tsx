@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Messages · The Weekly Showdown' }
 
-// Private 1:1 messages between signed-in teammates. Signed-out visitors
+// Private messages between signed-in teammates — 1:1 and groups. Signed-out visitors
 // get the locked view — no conversations, no names — instead of the inbox.
 export default async function Page() {
   const me = await getCompetitor()
@@ -20,7 +20,7 @@ export default async function Page() {
         <div>
           <h1 className="font-display text-3xl font-bold uppercase tracking-wide">Messages</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Private messages between you and your teammates — nobody else can see them.
+            Private messages between you and your teammates — one-to-one or group, nobody else can see them.
           </p>
         </div>
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-card p-6 text-center">

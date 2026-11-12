@@ -82,19 +82,40 @@ export type PushSubscriptionRecord = {
 }
 
 /**
- * A 1:1 private direct message. Only its two participants can ever see
- * it — the API enforces that on every read and write.
+ * A 1:1 private direct message, or one message in a group conversation.
+ * Only its participants can ever see it — the API enforces that on
+ * every read and write.
  */
 export type DirectMessage = {
   id: string
   /** Sender: `person:<roster id>` or `manager:<manager id>`. */
   fromKey: string
-  /** Recipient: `person:<roster id>` or `manager:<manager id>`. */
+  /** 1:1 recipient: `person:<roster id>` or `manager:<manager id>`.
+      For a group message this is `group:<group id>`. */
   toKey: string
+  /** Set for group messages: the group this message belongs to. */
+  groupId?: string
   text: string
   createdAt: string
-  /** Set when the recipient has opened the thread and seen it. */
+  /** 1:1: set when the recipient has opened the thread and seen it. */
   readAt?: string
+  /** Group messages: keys of the members (other than the sender) who
+      have opened the thread and seen it. */
+  readBy?: string[]
+}
+
+/**
+ * A group conversation. Membership is fixed at creation — there is no
+ * adding or removing members, no renaming, and no group admin controls
+ * in v1. Only its members can ever see it.
+ */
+export type GroupConversation = {
+  id: string
+  /** Member keys (`person:<roster id>` / `manager:<manager id>`), including the creator. */
+  members: string[]
+  createdAt: string
+  /** Key of the member who created the group. */
+  createdBy: string
 }
 
 export type Store = {
@@ -116,9 +137,13 @@ export type Store = {
   comments: Comment[]
   /** Manager announcements, newest first. */
   announcements: Announcement[]
-  /** Private 1:1 direct messages, newest first. Kept to the latest 500.
-      A message is visible only to its sender and its recipient. */
+  /** Private 1:1 direct messages and group messages, newest first.
+      Kept to the latest 500 across all conversations. A message is
+      visible only to its participants. */
   directMessages: DirectMessage[]
+  /** Group conversations. Membership is fixed at creation; a group only
+      shows in a member's list once it has at least one message. */
+  messageGroups: GroupConversation[]
   /** Web Push (VAPID) state. Server-only: the private key and the
       subscriptions are never exposed through any API route or client
       payload — only the public key is served, to signed-in users, so

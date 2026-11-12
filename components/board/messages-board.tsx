@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, Mail, Send, SquarePen } from 'lucide-react'
+import { ArrowLeft, Check, Mail, Send, SquarePen, Users } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { Button } from '@/components/ui/button'
@@ -8,15 +8,35 @@ import { cn } from '@/lib/utils'
 
 type Participant = { key: string; name: string; team: 'red' | 'blue' | null; manager: boolean }
 
+/** A group conversation, as the list and thread endpoints return it. */
+type GroupView = { id: string; name: string; members: Participant[] }
+
 type Conversation = {
-  other: Participant
+  /** Set for 1:1 rows; absent for group rows. */
+  other?: Participant
+  /** Set for group rows; absent for 1:1 rows. */
+  group?: GroupView
   lastText: string
   lastCreatedAt: string
   lastFromMe: boolean
   unread: number
 }
 
-type ThreadMessage = { id: string; fromKey: string; text: string; createdAt: string; readAt?: string | null; mine: boolean }
+type ThreadMessage = {
+  id: string
+  fromKey: string
+  text: string
+  createdAt: string
+  readAt?: string | null
+  /** Group messages: names of the members (other than the sender) who have read it. */
+  readByNames?: string[]
+  /** Group messages: true once every other member has read it. */
+  readByAll?: boolean
+  mine: boolean
+}
+
+/** What thread is open: a 1:1 chat with one person, or a group chat. */
+type Selected = { kind: 'dm'; other: Participant } | { kind: 'group'; group: GroupView }
 
 const fetcher = (url: string) =>
   fetch(url).then((r) => {
@@ -58,14 +78,30 @@ function ManagerTag() {
   )
 }
 
-// Private 1:1 messages. The conversation list shows one row per person
-// the viewer has messaged; tapping a row opens that thread. A thread is
-// visible only to its two participants — the API enforces that, so the
+// Group read receipt, on my own messages only: "Sent" while nobody has
+// read it, "Read by everyone" once every other member has opened the
+// thread, otherwise the first few readers' names ("Read by Isaiah,
+// Kaleb +1 more").
+function groupReceipt(m: ThreadMessage): string {
+  const names = m.readByNames ?? []
+  if (names.length === 0) return ' · Sent'
+  if (m.readByAll) return ' · Read by everyone'
+  const shown = names.slice(0, 3)
+  const extra = names.length - shown.length
+  return ` · Read by ${shown.join(', ')}${extra > 0 ? ` +${extra} more` : ''}`
+}
+
+// Private 1:1 messages and group messages. The conversation list
+// shows one row per person the viewer has messaged, plus one row per
+// group they belong to; tapping a row opens that thread. A thread is
+// visible only to its participants — the API enforces that, so the
 // client never has to. Same 500-character limit as the feed, same
 // 5-second refresh.
 export function MessagesBoard() {
-  const [selected, setSelected] = useState<Participant | null>(null)
+  const [selected, setSelected] = useState<Selected | null>(null)
   const [showPicker, setShowPicker] = useState(false)
+  // People checked in the picker for a new group chat.
+  const [picked, setPicked] = useState<string[]>([])
   const [draft, setDraft] = useState('')
   const [notice, setNotice] = useState('')
   const [sending, setSending] = useState(false)
@@ -84,14 +120,22 @@ export function MessagesBoard() {
     revalidateOnFocus: true,
   })
 
-  const threadUrl = selected ? `/api/messages?with=${encodeURIComponent(selected.key)}` : null
+  const threadUrl = selected
+    ? selected.kind === 'dm'
+      ? `/api/messages?with=${encodeURIComponent(selected.other.key)}`
+      : `/api/messages?group=${encodeURIComponent(selected.group.id)}`
+    : null
   const {
     data: threadData,
     mutate: mutateThread,
-  } = useSWR<{ other: Participant; messages: ThreadMessage[] }>(threadUrl, fetcher, {
+  } = useSWR<{ other?: Participant; group?: GroupView; messages: ThreadMessage[] }>(threadUrl, fetcher, {
     refreshInterval: 5_000,
     revalidateOnFocus: true,
   })
+
+  // A stable key for the open thread, for effects that should re-run
+  // when the thread changes.
+  const selectedKey = selected ? (selected.kind === 'dm' ? selected.other.key : `group:${selected.group.id}`) : null
 
   const { data: peopleData } = useSWR<{ people: Participant[] }>(
     showPicker ? '/api/messages?people=1' : null,
@@ -118,13 +162,53 @@ export function MessagesBoard() {
   // Keep the newest message in view.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [shown.length, selected?.key])
+  }, [shown.length, selectedKey])
 
   const openConversation = (other: Participant) => {
-    setSelected(other)
+    setSelected({ kind: 'dm', other })
     setShowPicker(false)
+    setPicked([])
     setSent([])
     setNotice('')
+  }
+
+  const openGroup = (group: GroupView) => {
+    setSelected({ kind: 'group', group })
+    setShowPicker(false)
+    setPicked([])
+    setSent([])
+    setNotice('')
+  }
+
+  const togglePick = (key: string) => {
+    setPicked((p) => (p.includes(key) ? p.filter((k) => k !== key) : [...p, key]))
+  }
+
+  // Start a group chat with everyone checked in the picker: the group
+  // is created, then the thread opens. Needs at least two people —
+  // one person is just a 1:1, which tapping their name already opens.
+  const startGroupChat = async () => {
+    if (picked.length < 2 || sending) return
+    setNotice('')
+    setSending(true)
+    try {
+      const res = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memberKeys: picked }),
+      })
+      const data = (await res.json().catch(() => null)) as { error?: string; group?: GroupView } | null
+      if (res.ok && data?.group) {
+        openGroup(data.group)
+        mutateList()
+      } else {
+        setNotice(data?.error ?? 'Could not start the group chat.')
+      }
+    } catch {
+      setNotice('Something went wrong starting the group chat. Check your connection and try again.')
+    } finally {
+      setSending(false)
+    }
   }
 
   const sendMessage = async (e: React.FormEvent) => {
@@ -147,7 +231,9 @@ export function MessagesBoard() {
       const res = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ toKey: selected.key, text: clean }),
+        body: JSON.stringify(
+          selected.kind === 'group' ? { groupId: selected.group.id, text: clean } : { toKey: selected.other.key, text: clean },
+        ),
       })
       const data = (await res.json().catch(() => null)) as { error?: string; message?: ThreadMessage } | null
       if (res.ok && data?.message) {
@@ -170,7 +256,14 @@ export function MessagesBoard() {
 
   // --- Thread view -------------------------------------------------------
   if (selected) {
-    const other = threadData?.other ?? selected
+    const isGroup = selected.kind === 'group'
+    const group = isGroup ? (threadData?.group ?? selected.group) : null
+    const other = !isGroup ? (threadData?.other ?? selected.other) : null
+    // In a group thread, incoming messages need the sender's name —
+    // otherwise nobody can tell who said what.
+    const groupMembers = group?.members ?? []
+    const senderName = (fromKey: string) => groupMembers.find((p) => p.key === fromKey)?.name ?? ''
+    const threadTitle = isGroup ? group!.name : other!.name
     return (
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
@@ -178,11 +271,23 @@ export function MessagesBoard() {
             <ArrowLeft className="size-4" aria-hidden="true" />
             Back
           </Button>
-          <div className="flex min-w-0 items-center gap-2">
-            <PersonDot p={other} className="mt-0" />
-            <p className="truncate text-lg font-semibold">{other.name}</p>
-            {other.manager && <ManagerTag />}
-          </div>
+          {isGroup ? (
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+                <Users className="size-4" aria-hidden="true" />
+              </span>
+              <p className="truncate text-lg font-semibold">{group!.name}</p>
+              <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+                Group
+              </span>
+            </div>
+          ) : (
+            <div className="flex min-w-0 items-center gap-2">
+              <PersonDot p={other!} className="mt-0" />
+              <p className="truncate text-lg font-semibold">{other!.name}</p>
+              {other!.manager && <ManagerTag />}
+            </div>
+          )}
         </div>
 
         {notice && (
@@ -191,10 +296,12 @@ export function MessagesBoard() {
           </p>
         )}
 
-        <div className="flex flex-col gap-2" aria-label={`Conversation with ${other.name}`}>
+        <div className="flex flex-col gap-2" aria-label={`Conversation with ${threadTitle}`}>
           {shown.length === 0 ? (
             <p className="rounded-2xl bg-card p-6 text-center text-sm text-muted-foreground">
-              No messages yet. Say hello — only the two of you can see this.
+              {isGroup
+                ? 'No messages yet. Say hello — only the group can see this.'
+                : 'No messages yet. Say hello — only the two of you can see this.'}
             </p>
           ) : (
             shown.map((m) => (
@@ -205,13 +312,23 @@ export function MessagesBoard() {
                     m.mine ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md bg-card',
                   )}
                 >
+                  {!m.mine && isGroup && (
+                    <p className="text-[11px] font-semibold text-muted-foreground">{senderName(m.fromKey)}</p>
+                  )}
                   <p className="text-sm break-words">{m.text}</p>
                   <p className={cn('mt-0.5 text-right text-[10px]', m.mine ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
                     {timeAgo(m.createdAt)}
-                    {/* Read receipt, on my own messages only: "Sent" until
-                        the other person opens the thread, then "Read …"
-                        once the server recorded readAt. */}
-                    {m.mine && (m.readAt ? ` · Read ${timeAgo(m.readAt)}` : ' · Sent')}
+                    {/* Read receipt, on my own messages only. 1:1: "Sent"
+                        until the other person opens the thread, then
+                        "Read …" once the server recorded readAt. Group:
+                        "Sent" until someone reads it, then who read it
+                        ("Read by everyone" once every other member has). */}
+                    {m.mine &&
+                      (m.readByNames !== undefined
+                        ? groupReceipt(m)
+                        : m.readAt
+                          ? ` · Read ${timeAgo(m.readAt)}`
+                          : ' · Sent')}
                   </p>
                 </div>
               </div>
@@ -222,14 +339,14 @@ export function MessagesBoard() {
 
         <form onSubmit={sendMessage} className="sticky bottom-24 flex gap-2 rounded-2xl border border-border bg-card p-3">
           <label htmlFor="dm-text" className="sr-only">
-            Message {other.name}
+            Message {threadTitle}
           </label>
           <input
             id="dm-text"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             maxLength={500}
-            placeholder={`Message ${other.name}…`}
+            placeholder={`Message ${threadTitle}…`}
             autoComplete="off"
             className="h-11 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
@@ -249,7 +366,7 @@ export function MessagesBoard() {
         <div>
           <h1 className="font-display text-3xl font-bold uppercase tracking-wide">Messages</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Private messages between you and your teammates — nobody else can see them.
+            Private messages between you and your teammates — one-to-one or group, nobody else can see them.
           </p>
         </div>
         <Button
@@ -273,28 +390,63 @@ export function MessagesBoard() {
       {showPicker && (
         <div className="rounded-2xl border border-border bg-card p-3">
           <p className="px-1 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Message someone
+            Message someone — or check a few people for a group chat
           </p>
           {!peopleData ? (
             <p className="px-1 py-2 text-sm text-muted-foreground">Loading…</p>
           ) : peopleData.people.length === 0 ? (
             <p className="px-1 py-2 text-sm text-muted-foreground">Nobody else to message yet.</p>
           ) : (
-            <ul className="flex flex-col">
-              {peopleData.people.map((p) => (
-                <li key={p.key}>
-                  <button
-                    type="button"
-                    onClick={() => openConversation(p)}
-                    className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-muted/60"
-                  >
-                    <PersonDot p={p} className="mt-0" />
-                    <span className="font-semibold">{p.name}</span>
-                    {p.manager && <ManagerTag />}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="flex flex-col">
+                {peopleData.people.map((p) => (
+                  <li key={p.key} className="flex items-center gap-1 rounded-xl hover:bg-muted/60">
+                    {/* The checkbox is the group picker: tap it to add
+                        someone to a new group chat. Tapping the name
+                        still opens a 1:1 chat with them, as before. */}
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={picked.includes(p.key)}
+                      aria-label={`Add ${p.name} to a group chat`}
+                      onClick={() => togglePick(p.key)}
+                      className="flex size-9 shrink-0 items-center justify-center"
+                    >
+                      <span
+                        className={cn(
+                          'flex size-5 items-center justify-center rounded-md border-2',
+                          picked.includes(p.key)
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-muted-foreground/40',
+                        )}
+                      >
+                        {picked.includes(p.key) && <Check className="size-3.5" aria-hidden="true" />}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openConversation(p)}
+                      className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-2.5 text-left"
+                    >
+                      <PersonDot p={p} className="mt-0" />
+                      <span className="font-semibold">{p.name}</span>
+                      {p.manager && <ManagerTag />}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {picked.length === 1 && (
+                <p className="px-1 pt-2 text-xs text-muted-foreground">
+                  Pick at least one more person to start a group chat.
+                </p>
+              )}
+              {picked.length >= 2 && (
+                <Button type="button" onClick={startGroupChat} disabled={sending} className="mt-2 w-full gap-1.5">
+                  <Users className="size-4" aria-hidden="true" />
+                  Start group chat ({picked.length})
+                </Button>
+              )}
+            </>
           )}
         </div>
       )}
@@ -319,32 +471,71 @@ export function MessagesBoard() {
         </div>
       ) : (
         <ol className="flex flex-col gap-2">
-          {conversations.map((c) => (
-            <li key={c.other.key} className="overflow-hidden rounded-2xl border border-border bg-card">
-              <button type="button" onClick={() => openConversation(c.other)} className="flex w-full items-start gap-3 px-4 py-3 text-left">
-                <PersonDot p={c.other} />
-                <span className="min-w-0 flex-1">
-                  <span className="flex flex-wrap items-baseline gap-x-2">
-                    <span className="font-semibold">{c.other.name}</span>
-                    {c.other.manager && <ManagerTag />}
-                    <span className="text-xs text-muted-foreground">{timeAgo(c.lastCreatedAt)}</span>
+          {conversations.map((c) =>
+            c.group ? (
+              <li key={`group-${c.group.id}`} className="overflow-hidden rounded-2xl border border-border bg-card">
+                <button
+                  type="button"
+                  onClick={() => openGroup(c.group!)}
+                  className="flex w-full items-start gap-3 px-4 py-3 text-left"
+                >
+                  <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+                    <Users className="size-4" aria-hidden="true" />
                   </span>
-                  <span className="mt-0.5 block truncate text-sm text-muted-foreground">
-                    {c.lastFromMe ? 'You: ' : ''}
-                    {c.lastText}
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="font-semibold">{c.group.name}</span>
+                      <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+                        Group
+                      </span>
+                      <span className="text-xs text-muted-foreground">{timeAgo(c.lastCreatedAt)}</span>
+                    </span>
+                    <span className="mt-0.5 block truncate text-sm text-muted-foreground">
+                      {c.lastFromMe ? 'You: ' : ''}
+                      {c.lastText}
+                    </span>
                   </span>
-                </span>
-                {c.unread > 0 && (
-                  <span
-                    className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
-                    aria-label={`${c.unread} unread messages`}
-                  >
-                    {c.unread > 9 ? '9+' : c.unread}
+                  {c.unread > 0 && (
+                    <span
+                      className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
+                      aria-label={`${c.unread} unread messages`}
+                    >
+                      {c.unread > 9 ? '9+' : c.unread}
+                    </span>
+                  )}
+                </button>
+              </li>
+            ) : (
+              <li key={c.other!.key} className="overflow-hidden rounded-2xl border border-border bg-card">
+                <button
+                  type="button"
+                  onClick={() => openConversation(c.other!)}
+                  className="flex w-full items-start gap-3 px-4 py-3 text-left"
+                >
+                  <PersonDot p={c.other!} />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="font-semibold">{c.other!.name}</span>
+                      {c.other!.manager && <ManagerTag />}
+                      <span className="text-xs text-muted-foreground">{timeAgo(c.lastCreatedAt)}</span>
+                    </span>
+                    <span className="mt-0.5 block truncate text-sm text-muted-foreground">
+                      {c.lastFromMe ? 'You: ' : ''}
+                      {c.lastText}
+                    </span>
                   </span>
-                )}
-              </button>
-            </li>
-          ))}
+                  {c.unread > 0 && (
+                    <span
+                      className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
+                      aria-label={`${c.unread} unread messages`}
+                    >
+                      {c.unread > 9 ? '9+' : c.unread}
+                    </span>
+                  )}
+                </button>
+              </li>
+            ),
+          )}
         </ol>
       )}
     </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { Megaphone, MessageSquareReply, Send, Trash2 } from 'lucide-react'
+import { Megaphone, MessageSquareReply, Pencil, Send, Trash2 } from 'lucide-react'
 import { useMemo, useState, useTransition } from 'react'
 import useSWR from 'swr'
 import { addAnnouncement, addComment, deleteAnnouncement, deleteComment } from '@/app/actions'
@@ -16,10 +16,11 @@ type FeedComment = {
   manager: boolean
   text: string
   createdAt: string
+  editedAt?: string
   parentId: string | null
 }
 
-type FeedAnnouncement = { id: string; text: string; createdAt: string; name: string }
+type FeedAnnouncement = { id: string; text: string; createdAt: string; editedAt?: string; name: string }
 
 type Feed = { comments: FeedComment[]; announcements: FeedAnnouncement[] }
 
@@ -51,7 +52,9 @@ function timeAgo(iso: string) {
 // name with a Manager tag and no team dot. Any comment can be replied to:
 // replies thread one level deep under the comment they answer, newest first
 // in the thread. A comment's author (or any manager) can delete it, and
-// deleting a comment takes its replies with it.
+// deleting a comment takes its replies with it. The author (or any manager)
+// can also edit a comment — or an announcement — in place; the edited text
+// keeps its original spot and shows an "(edited)" marker.
 export function CommentsBoard({ isManager, me }: { isManager: boolean; me: string | null }) {
   const { data, error, isLoading, mutate } = useSWR<Feed>('/api/comments', fetcher, {
     refreshInterval: 5_000,
@@ -63,6 +66,10 @@ export function CommentsBoard({ isManager, me }: { isManager: boolean; me: strin
   const [notice, setNotice] = useState('')
   const [replyingTo, setReplyingTo] = useState<{ id: string; name: string } | null>(null)
   const [replyText, setReplyText] = useState('')
+  // The one comment or announcement being edited inline, if any.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingKind, setEditingKind] = useState<'comment' | 'announcement'>('comment')
+  const [editText, setEditText] = useState('')
 
   const postComment = (e: React.FormEvent) => {
     e.preventDefault()
@@ -148,6 +155,72 @@ export function CommentsBoard({ isManager, me }: { isManager: boolean; me: strin
     })
   }
 
+  const startEditing = (id: string, kind: 'comment' | 'announcement', text: string) => {
+    setEditingId(id)
+    setEditingKind(kind)
+    setEditText(text)
+    setNotice('')
+  }
+
+  const cancelEditing = () => {
+    setEditingId(null)
+    setEditText('')
+  }
+
+  const saveEdit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingId) return
+    const clean = editText.trim()
+    if (!clean) return
+    setNotice('')
+    start(async () => {
+      try {
+        const res = await fetch('/api/comments', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editingId, kind: editingKind, text: clean }),
+        })
+        const data = (await res.json().catch(() => null)) as { error?: string } | null
+        if (res.ok) {
+          setEditingId(null)
+          setEditText('')
+          mutate()
+        } else {
+          setNotice(data?.error ?? 'Could not save that edit.')
+        }
+      } catch {
+        setNotice('Something went wrong saving. Check your connection and try again.')
+      }
+    })
+  }
+
+  // The inline editor shown in place of a comment's (or announcement's)
+  // text while it is being edited: same 500-character limit as posting.
+  const editForm = (
+    <form onSubmit={saveEdit} className="mt-1 flex flex-col gap-1.5">
+      <textarea
+        autoFocus
+        value={editText}
+        onChange={(e) => setEditText(e.target.value)}
+        maxLength={500}
+        rows={2}
+        aria-label="Edit comment"
+        className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs text-muted-foreground tabular-nums">{editText.length}/500</span>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" size="sm" disabled={pending} onClick={cancelEditing}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={pending || !editText.trim()}>
+            Save
+          </Button>
+        </div>
+      </div>
+    </form>
+  )
+
   const comments = data?.comments ?? []
   const announcements = data?.announcements ?? []
 
@@ -195,9 +268,14 @@ export function CommentsBoard({ isManager, me }: { isManager: boolean; me: strin
             </span>
           )}
           <span className="text-xs text-muted-foreground">{timeAgo(c.createdAt)}</span>
+          {c.editedAt && <span className="text-xs italic text-muted-foreground">(edited)</span>}
         </p>
-        <p className="mt-0.5 text-sm break-words">{c.text}</p>
-        {!inThread && (
+        {editingId === c.id && editingKind === 'comment' ? (
+          editForm
+        ) : (
+          <p className="mt-0.5 text-sm break-words">{c.text}</p>
+        )}
+        {!inThread && !(editingId === c.id && editingKind === 'comment') && (
           <div className="mt-1.5 flex items-center gap-3">
             <button
               type="button"
@@ -220,17 +298,72 @@ export function CommentsBoard({ isManager, me }: { isManager: boolean; me: strin
         )}
       </div>
       {(isManager || c.personId === me) && (
-        <button
-          type="button"
-          onClick={() => removeComment(c.id)}
-          disabled={pending}
-          className="rounded-md p-1.5 text-muted-foreground hover:text-destructive"
-          aria-label={`Delete comment from ${c.name}`}
-        >
-          <Trash2 className="size-4" />
-        </button>
+        <div className="flex shrink-0 items-center">
+          <button
+            type="button"
+            onClick={() => startEditing(c.id, 'comment', c.text)}
+            disabled={pending}
+            className="rounded-md p-1.5 text-muted-foreground hover:text-foreground"
+            aria-label={`Edit comment from ${c.name}`}
+          >
+            <Pencil className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => removeComment(c.id)}
+            disabled={pending}
+            className="rounded-md p-1.5 text-muted-foreground hover:text-destructive"
+            aria-label={`Delete comment from ${c.name}`}
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
       )}
     </div>
+  )
+
+  // Announcements render twice — pinned at the top and in the feed in
+  // chronological order — from the same array. Managers can edit or
+  // delete them from either spot.
+  const announcementCard = (a: FeedAnnouncement) => (
+    <article className="flex items-start gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+      <Megaphone className="mt-0.5 size-4 shrink-0 text-amber-400" aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        <p className="flex flex-wrap items-baseline gap-x-2 text-xs font-semibold uppercase tracking-wide text-amber-400">
+          <span>
+            Announcement · {a.name} · {timeAgo(a.createdAt)}
+          </span>
+          {a.editedAt && <span className="normal-case italic text-amber-400/70">(edited)</span>}
+        </p>
+        {editingId === a.id && editingKind === 'announcement' ? (
+          editForm
+        ) : (
+          <p className="mt-0.5 text-sm">{a.text}</p>
+        )}
+      </div>
+      {isManager && (
+        <div className="flex shrink-0 items-center">
+          <button
+            type="button"
+            onClick={() => startEditing(a.id, 'announcement', a.text)}
+            disabled={pending}
+            className="rounded-md p-1.5 text-muted-foreground hover:text-foreground"
+            aria-label="Edit announcement"
+          >
+            <Pencil className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => removeAnnouncement(a.id)}
+            disabled={pending}
+            className="rounded-md p-1.5 text-muted-foreground hover:text-destructive"
+            aria-label="Delete announcement"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
+      )}
+    </article>
   )
 
   return (
@@ -275,26 +408,7 @@ export function CommentsBoard({ isManager, me }: { isManager: boolean; me: strin
       {announcements.length > 0 && (
         <section aria-label="Announcements" className="flex flex-col gap-2">
           {announcements.map((a) => (
-            <article key={a.id} className="flex items-start gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
-              <Megaphone className="mt-0.5 size-4 shrink-0 text-amber-400" aria-hidden="true" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-amber-400">
-                  Announcement · {a.name} · {timeAgo(a.createdAt)}
-                </p>
-                <p className="mt-0.5 text-sm">{a.text}</p>
-              </div>
-              {isManager && (
-                <button
-                  type="button"
-                  onClick={() => removeAnnouncement(a.id)}
-                  disabled={pending}
-                  className="rounded-md p-1.5 text-muted-foreground hover:text-destructive"
-                  aria-label="Delete announcement"
-                >
-                  <Trash2 className="size-4" />
-                </button>
-              )}
-            </article>
+            <div key={a.id}>{announcementCard(a)}</div>
           ))}
         </section>
       )}
@@ -341,28 +455,7 @@ export function CommentsBoard({ isManager, me }: { isManager: boolean; me: strin
         <ol className="flex flex-col gap-2">
           {feed.items.map((item) =>
             item.kind === 'announcement' ? (
-              <li key={`a-${item.announcement.id}`}>
-                <article className="flex items-start gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
-                  <Megaphone className="mt-0.5 size-4 shrink-0 text-amber-400" aria-hidden="true" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-400">
-                      Announcement · {item.announcement.name} · {timeAgo(item.announcement.createdAt)}
-                    </p>
-                    <p className="mt-0.5 text-sm">{item.announcement.text}</p>
-                  </div>
-                  {isManager && (
-                    <button
-                      type="button"
-                      onClick={() => removeAnnouncement(item.announcement.id)}
-                      disabled={pending}
-                      className="rounded-md p-1.5 text-muted-foreground hover:text-destructive"
-                      aria-label="Delete announcement"
-                    >
-                      <Trash2 className="size-4" />
-                    </button>
-                  )}
-                </article>
-              </li>
+              <li key={`a-${item.announcement.id}`}>{announcementCard(item.announcement)}</li>
             ) : (
               <li key={item.comment.id} className="overflow-hidden rounded-2xl border border-border bg-card">
                 {commentCard(item.comment, false)}

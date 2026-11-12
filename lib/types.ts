@@ -57,10 +57,20 @@ export type Comment = {
   managerId?: ManagerId
   text: string
   createdAt: string
+  /** Set when the text was last edited (the original position/order is kept). */
+  editedAt?: string
   /** Top-level comment this is a reply to. Absent for top-level comments. One level of threading only. */
   parentId?: string
 }
-export type Announcement = { id: string; text: string; createdAt: string; /** Which manager posted it. */ managerId?: ManagerId }
+export type Announcement = {
+  id: string
+  text: string
+  createdAt: string
+  /** Set when the text was last edited (the original position/order is kept). */
+  editedAt?: string
+  /** Which manager posted it. */
+  managerId?: ManagerId
+}
 
 /** One browser's push subscription, tied to the person who opted in. */
 export type PushSubscriptionRecord = {

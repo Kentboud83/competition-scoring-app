@@ -28,6 +28,7 @@ function initialStore(): Store {
     views: 0,
     comments: [],
     announcements: [],
+    directMessages: [],
     auth: { sessions: [], competitors: {}, competitorSessions: {}, managers: {}, managerSessions: {} },
     updatedAt: new Date().toISOString(),
   }
@@ -47,6 +48,7 @@ function normalizeStore(stored: Store): Store {
     views: typeof stored.views === 'number' ? stored.views : 0,
     comments: Array.isArray(stored.comments) ? stored.comments : [],
     announcements: Array.isArray(stored.announcements) ? stored.announcements : [],
+    directMessages: Array.isArray(stored.directMessages) ? stored.directMessages : [],
     push: {
       vapidPublicKey: stored.push?.vapidPublicKey,
       vapidPrivateKey: stored.push?.vapidPrivateKey,

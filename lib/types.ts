@@ -81,6 +81,22 @@ export type PushSubscriptionRecord = {
   createdAt: string
 }
 
+/**
+ * A 1:1 private direct message. Only its two participants can ever see
+ * it — the API enforces that on every read and write.
+ */
+export type DirectMessage = {
+  id: string
+  /** Sender: `person:<roster id>` or `manager:<manager id>`. */
+  fromKey: string
+  /** Recipient: `person:<roster id>` or `manager:<manager id>`. */
+  toKey: string
+  text: string
+  createdAt: string
+  /** Set when the recipient has opened the thread and seen it. */
+  readAt?: string
+}
+
 export type Store = {
   settings: { startDate: string; team1: string; team2: string }
   rules: Rules
@@ -100,6 +116,9 @@ export type Store = {
   comments: Comment[]
   /** Manager announcements, newest first. */
   announcements: Announcement[]
+  /** Private 1:1 direct messages, newest first. Kept to the latest 500.
+      A message is visible only to its sender and its recipient. */
+  directMessages: DirectMessage[]
   /** Web Push (VAPID) state. Server-only: the private key and the
       subscriptions are never exposed through any API route or client
       payload — only the public key is served, to signed-in users, so

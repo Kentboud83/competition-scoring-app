@@ -17,14 +17,28 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'The Weekly Showdown'
   const body = data.body || 'New activity in Smack Talk.'
   const url = data.url || '/comments'
-  event.waitUntil(
+  const show = () =>
     self.registration.showNotification(title, {
       body,
       icon: '/icon-192.png',
       badge: '/icon-192.png',
       tag: 'showdown-feed',
       data: { url },
-    }),
+    })
+  event.waitUntil(
+    // If the user is already looking at the app, the new content is
+    // already live in front of them (the feed and messages refresh on
+    // their own) — posting a notification too would put a number on the
+    // app icon for something they have already seen, and that
+    // notification would sit in the shade until dismissed. So skip it
+    // when a window is focused. If the client list cannot be read,
+    // show the notification rather than silently dropping it.
+    self.clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clients) => {
+        if (!clients.some((c) => c.focused)) return show()
+      })
+      .catch(() => show()),
   )
 })
 

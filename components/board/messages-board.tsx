@@ -296,7 +296,10 @@ export function MessagesBoard() {
           </p>
         )}
 
-        <div className="flex flex-col gap-2" aria-label={`Conversation with ${threadTitle}`}>
+        {/* The messages area gets bottom padding so the last message
+            clears the fixed composer below (the main's own bottom padding
+            alone isn't enough once the composer leaves the flow). */}
+        <div className="flex flex-1 flex-col gap-2 pb-24" aria-label={`Conversation with ${threadTitle}`}>
           {shown.length === 0 ? (
             <p className="rounded-2xl bg-card p-6 text-center text-sm text-muted-foreground">
               {isGroup
@@ -337,24 +340,34 @@ export function MessagesBoard() {
           <div ref={bottomRef} />
         </div>
 
-        <form onSubmit={sendMessage} className="sticky bottom-24 flex gap-2 rounded-2xl border border-border bg-card p-3">
-          <label htmlFor="dm-text" className="sr-only">
-            Message {threadTitle}
-          </label>
-          <input
-            id="dm-text"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            maxLength={500}
-            placeholder={`Message ${threadTitle}…`}
-            autoComplete="off"
-            className="h-11 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-          <Button type="submit" size="lg" disabled={sending || !draft.trim()} aria-label="Send message">
-            <Send className="size-4" aria-hidden="true" />
-          </Button>
-        </form>
-        <p className="text-right text-xs text-muted-foreground tabular-nums">{draft.length}/500</p>
+        {/* Composer: fixed to the bottom of the screen (above the bottom
+            nav, same 96px offset the old sticky form used) instead of
+            sitting in the flow right under the last message — on a short
+            thread it used to float up by the messages, and on a long one
+            it scrolled away with the page. The inner wrapper mirrors the
+            main content column so the composer lines up with the thread. */}
+        <div className="fixed inset-x-0 bottom-24 z-20">
+          <div className="mx-auto w-full max-w-3xl px-4">
+            <form onSubmit={sendMessage} className="flex gap-2 rounded-2xl border border-border bg-card p-3">
+              <label htmlFor="dm-text" className="sr-only">
+                Message {threadTitle}
+              </label>
+              <input
+                id="dm-text"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                maxLength={500}
+                placeholder={`Message ${threadTitle}…`}
+                autoComplete="off"
+                className="h-11 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <Button type="submit" size="lg" disabled={sending || !draft.trim()} aria-label="Send message">
+                <Send className="size-4" aria-hidden="true" />
+              </Button>
+            </form>
+            <p className="mt-1 text-right text-xs text-muted-foreground tabular-nums">{draft.length}/500</p>
+          </div>
+        </div>
       </div>
     )
   }

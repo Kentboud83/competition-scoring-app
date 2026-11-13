@@ -3,6 +3,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { getSessionState } from '@/lib/auth'
 import { InstallButton } from './install-button'
+import { SettingsMenu } from './settings-menu'
 
 export async function AppHeader() {
   const { competitor: me, manager: mgr, isManager: manager } = await getSessionState()
@@ -36,6 +37,7 @@ export async function AppHeader() {
               <Lock className="size-4" aria-hidden="true" />
             </Link>
           )}
+          {signedInName && <SettingsMenu />}
           <InstallButton />
         </div>
       </div>

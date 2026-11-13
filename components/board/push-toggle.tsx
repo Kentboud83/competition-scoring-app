@@ -7,11 +7,11 @@ import { cn } from '@/lib/utils'
 
 // Notifications are ON by default: the app shows a banner the first time
 // a signed-in person opens the Smack Talk tab, and tapping "Turn on
-// notifications" fires the phone's own permission prompt. Once notifications
-// are ON, the whole control hides — the person who turned them on simply
-// no longer sees the switch, and turning them back off is only possible
-// from the browser/phone site settings (Kent's call). The toggle never
-// fakes "on": it reads the real subscription state, so if the browser
+// notifications" fires the phone's own permission prompt. On the Smack Talk
+// tab the control hides once notifications are ON (Kent's call, Nov 12) —
+// but the Settings menu (gear icon in the header) always shows the switch,
+// so anyone can turn notifications back off from inside the app. The toggle
+// never fakes "on": it reads the real subscription state, so if the browser
 // permission is denied it shows off and says how to re-enable it.
 // It re-checks the permission every time the person returns to the tab, so
 // allowing it in the phone settings while the app is open un-blocks the
@@ -74,7 +74,7 @@ async function getRegistration(): Promise<ServiceWorkerRegistration | null> {
   }
 }
 
-export function PushToggle() {
+export function PushToggle({ alwaysShow = false }: { alwaysShow?: boolean }) {
   const [state, setState] = useState<PushState>('loading')
   const [busy, setBusy] = useState(false)
   const [showAsk, setShowAsk] = useState(false)
@@ -156,8 +156,10 @@ export function PushToggle() {
       }
     })()
     if (alreadyAsked) return
-    setShowAsk(true)
-  }, [])
+    // In the Settings menu the switch itself is the control, so there is
+    // no first-visit banner — only the Smack Talk spot shows it.
+    if (!alwaysShow) setShowAsk(true)
+  }, [alwaysShow])
 
   // First visit: notifications default on, so show the banner explaining
   // them. The native prompt fires ONLY when the person taps "Turn on
@@ -265,9 +267,10 @@ export function PushToggle() {
     )
   }
 
-  // Once notifications are ON, the control hides entirely — no banner, no
-  // switch. The only way back off is the browser/phone site settings.
-  if (state === 'on') {
+  // On the Smack Talk tab the control hides entirely once notifications
+  // are ON — no banner, no switch. In the Settings menu (alwaysShow) it
+  // stays visible so the switch can turn them back off.
+  if (state === 'on' && !alwaysShow) {
     return null
   }
 
